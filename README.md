@@ -8,10 +8,10 @@ Primeros pasos de instalacion
 
 Luego:
 
--npm install express
+- npm install express
 
--npm install
+- npm install
 
--npm install nodemon --save-dev
+- npm install nodemon --save-dev
 
--npm install cors mongoose
+- npm install cors mongoose

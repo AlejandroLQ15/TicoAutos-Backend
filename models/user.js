@@ -6,4 +6,4 @@ const userSchema = new mongoose.Schema({
     nombre: { required: true, type: String }
 });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', userSchema);    
