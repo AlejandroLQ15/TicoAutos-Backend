@@ -1,16 +1,27 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/users');
+const User = require('../models/user');
 
 // POST /api/users/register
 router.post('/register', async (req, res) => {
   try {
-    const userData = req.body;
-    const user = new User(userData);
+    const { username, password, nombre } = req.body;
+    if (!username || username.trim() === '') {
+      return res.sendStatus(400);
+    }
+    // Check if username already exists
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.sendStatus(409);
+    }
+    const user = new User({ username, password, nombre });
     await user.save();
-    res.status(201).json;
+    res.status(201).json(user);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    if (error.code === 11000) {
+      return res.sendStatus(409);
+    }
+    res.sendStatus(400);
   }
 });
 
@@ -20,14 +31,14 @@ router.post('/login', async (req, res) => {
   try {
     const user = await User.findOne({ username });
     if (!user) {
-      return res.status(404).json;
+      return res.sendStatus(404);
     }
     if (user.password !== password) {
-      return res.status(401).json;
+      return res.sendStatus(401);
     }
-    res.status(200).json;
+    res.status(200).json(user);
   } catch (error) {
-    res.status(500).json;
+    res.sendStatus(500);
   }
 });
 
