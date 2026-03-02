@@ -15,3 +15,5 @@ Luego:
 - npm install nodemon --save-dev
 
 - npm install cors mongoose
+
+- npm install cors
