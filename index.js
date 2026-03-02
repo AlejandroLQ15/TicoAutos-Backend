@@ -20,11 +20,25 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
-// Enable CORS for frontend communication
+// Enable CORS for frontend communication (allow dev origins)
+const allowedOrigins = [
+  'http://localhost:5173', // Vite / React dev
+  'http://127.0.0.1:5500',  // Live Server / static HTML
+  'http://localhost:3001'   // alternative frontend port
+];
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // allow non-browser requests
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS policy: Origin not allowed'));
+  },
   credentials: true
 }));
+
+// preflight handled by CORS middleware applied globally
 
 app.use(express.json());
 
