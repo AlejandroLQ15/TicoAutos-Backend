@@ -2,12 +2,12 @@ const Vehicle = require('../models/vehicule');
 
 const autoPost = async (req, res) => {
   try {
-    const { marca, modelo, anio, precio, estado, owner_id } = req.body;
+    const { marca, modelo, anio, precio, estado } = req.body;
     
-    if (!marca || !modelo || !anio || !precio || !owner_id) {
+    if (!marca || !modelo || !anio || !precio) {
       return res.status(400).json({
         success: false,
-        message: 'All fields (marca, modelo, anio, precio, owner_id) are required'
+        message: 'All fields (marca, modelo, anio, precio) are required'
       });
     }
     
@@ -17,7 +17,7 @@ const autoPost = async (req, res) => {
       anio,
       precio,
       estado: estado || 'disponible',
-      owner_id
+      owner_id: req.user.id
     });
     
     await nuevoAuto.save();
@@ -66,10 +66,16 @@ const autoGetById = async (req, res) => {
 
 const autoDelete = async (req, res) => {
   try {
-    const auto = await Vehicle.findByIdAndDelete(req.params.id);
+    const auto = await Vehicle.findById(req.params.id);
     if (!auto) {
       return res.status(404).json({ success: false, message: 'Auto not found' });
     }
+    
+    if (auto.owner_id.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Not authorized. You are not the owner of this vehicle.' });
+    }
+    
+    await Vehicle.findByIdAndDelete(req.params.id);
     
     res.status(200).json({
       success: true,

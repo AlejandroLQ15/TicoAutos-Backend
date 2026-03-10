@@ -1,8 +1,9 @@
 // server/index.js
+require('dotenv').config();
 const mongoose = require('mongoose');
 
 //Here you define the URL and the database name
-mongoose.connect('mongodb://127.0.0.1:27017/ticoautos'); 
+mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ticoautos'); 
 
 const database = mongoose.connection;
 
@@ -16,9 +17,9 @@ database.once('connected', () => {
     console.log('Database Connected');
 });
 // Express setup
-const express = require('express');
-const cors = require('cors');
-const app = express();
+const express = require('express');// Importa el framework para crear el servidor.
+const cors = require('cors');// Importa el middleware de seguridad CORS.
+const app = express();// Inicializa la aplicación Express.
 
 // Enable CORS for frontend communication (allow dev origins)
 const allowedOrigins = [
@@ -28,7 +29,7 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function(origin, callback) {// Permite peticiones que no vienen de un navegador
     if (!origin) return callback(null, true); // allow non-browser requests
     if (allowedOrigins.indexOf(origin) !== -1) {
       return callback(null, true);

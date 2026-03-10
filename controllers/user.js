@@ -1,4 +1,6 @@
 const User = require('../models/users');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const userRegister = async (req, res) => {
   try {
@@ -6,6 +8,10 @@ const userRegister = async (req, res) => {
     
     if (!username || username.trim() === '') {
       return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+    
+    if (!password || password.trim() === '') {
+      return res.status(400).json({ success: false, message: 'Password is required' });
     }
     
     if (!nombre || nombre.trim() === '') {
@@ -17,7 +23,10 @@ const userRegister = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Username already exists' });
     }
     
-    const user = new User({ username, password, nombre });
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    
+    const user = new User({ username, password: hashedPassword, nombre });
     await user.save();
     
     res.status(201).json({ 
@@ -43,13 +52,21 @@ const userLogin = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     
-    if (user.password !== password) {
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid password' });
     }
+    
+    const token = jwt.sign(
+      { id: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
     
     res.status(200).json({ 
       success: true, 
       message: 'Login successful',
+      token,
       user: { id: user._id, username: user.username, nombre: user.nombre }
     });
   } catch (error) {
