@@ -7,20 +7,20 @@ const userRegister = async (req, res) => {
     const { username, password, nombre } = req.body;
     
     if (!username || username.trim() === '') {
-      return res.status(400).json({ success: false, message: 'Username is required' });
+      return res.status(400).json({ success: false });
     }
     
     if (!password || password.trim() === '') {
-      return res.status(400).json({ success: false, message: 'Password is required' });
+      return res.status(400).json({ success: false });
     }
     
     if (!nombre || nombre.trim() === '') {
-      return res.status(400).json({ success: false, message: 'Name is required' });
+      return res.status(400).json({ success: false });
     }
     
     const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(409).json({ success: false, message: 'Username already exists' });
+      return res.status(409).json({ success: false });
     }
     
     const salt = await bcrypt.genSalt(10);
@@ -36,7 +36,7 @@ const userRegister = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({ success: false, message: 'Error registering user' });
+    res.status(400).json({ success: false });
   }
 };
 
@@ -44,17 +44,17 @@ const userLogin = async (req, res) => {
   const { username, password } = req.body;
   try {
     if (!username || !password) {
-      return res.status(400).json({ success: false, message: 'Username and password are required' });
+      return res.status(400).json({ success: false });
     }
     
     const user = await User.findOne({ username });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ success: false });
     }
     
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid password' });
+      return res.status(401).json({ success: false });
     }
     
     const token = jwt.sign(
@@ -71,7 +71,7 @@ const userLogin = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false });
   }
 };
 
