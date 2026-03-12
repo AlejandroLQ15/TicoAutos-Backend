@@ -51,6 +51,13 @@ app.use('/api/users', userRoutes);
 const autosRoutes = require('./routes/autos');
 app.use('/api/autos', autosRoutes);
 
+// Import and mount inbox routes
+const questionsRoutes = require('./routes/questions');
+app.use('/api/questions', questionsRoutes);
+
+const answersRoutes = require('./routes/answers');
+app.use('/api/answers', answersRoutes);
+
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

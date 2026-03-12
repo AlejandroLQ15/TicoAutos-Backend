@@ -1,21 +1,26 @@
-JavaScript
 const mongoose = require('mongoose');
 
 const questionSchema = new mongoose.Schema({
-    pregunta: { required: true, type: String },
-    fecha_pregunta: { type: Date, default: Date.now },
+    pregunta: { required: true, type: String, trim: true, immutable: true },
+    fecha_pregunta: { type: Date, default: Date.now, immutable: true },
     vehiculo_id: {
         required: true,
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Vehicle'
+        ref: 'Vehicle',
+        immutable: true
     },
-    usuario_id: {
+    usuario_pregunta_id: {
         required: true,
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'User',
+        immutable: true
     },
-    respuesta: { type: String }, 
-    fecha_respuesta: { type: Date } 
+    usuario_duenio_id: {
+        required: true,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        immutable: true
+    }
 });
 
 module.exports = mongoose.model('Question', questionSchema);
