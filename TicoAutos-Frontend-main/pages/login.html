@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Iniciar sesión - TicoAutos</title>
+  
+  <link rel="stylesheet" href="../css/login.css">
+
+</head>
+<body class="auth-page">
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+         <img src="../assets/TicoAutos_Logo.png" alt="TicoAutos" class="auth-logo-img">
+        <h1 class="auth-title">Iniciar sesión</h1>
+        <p class="auth-subtitle">Accede a tu cuenta para gestionar vehículos</p>
+      </div>
+
+      <form id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label class="form-label" for="usuario">Usuario</label>
+          <input type="text" id="usuario" name="usuario" class="form-input" placeholder="Tu nombre de usuario" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="contrasena">Contraseña</label>
+          <input type="password" id="contrasena" name="contrasena" class="form-input" placeholder="Tu contraseña" required>
+        </div>
+        <button type="submit" class="btn-submit">Entrar</button>
+      </form>
+
+      <div class="auth-footer">
+        <p>¿No tienes cuenta? <a href="registro.html">Regístrate</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LOGIN_URL = 'http://localhost:3000/api/users/login';
+    const AUTH_TOKEN_KEY = 'authToken';
+    const AUTH_USER_KEY = 'authUser';
+
+    (function () {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      const rawUser = localStorage.getItem(AUTH_USER_KEY);
+      if (!token || !rawUser) return;
+      try {
+        const parsed = JSON.parse(rawUser);
+        if (parsed && Object.keys(parsed).length > 0) {
+          window.location.replace('../index.html');
+        }
+      } catch {
+        localStorage.removeItem(AUTH_USER_KEY);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+      }
+    })();
+
+    document.getElementById('loginForm').addEventListener('submit', async function(event) {
+      event.preventDefault();
+      const usuario = document.getElementById('usuario').value.trim();
+      const contrasena = document.getElementById('contrasena').value;
+
+      try {
+        const resp = await fetch(LOGIN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: usuario, password: contrasena }),
+        });
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => null);
+          throw new Error(errData?.message || 'Credenciales inválidas');
+        }
+        const data = await resp.json().catch(() => ({}));
+        if (!data.token) {
+          throw new Error('No se recibió token de autenticación');
+        }
+        localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user || { username: usuario }));
+        alert('Inicio de sesión exitoso');
+        window.location.href = '../index.html';
+      } catch (err) {
+        console.error('Error en autenticación', err);
+        alert(err.message || 'Credenciales inválidas');
+      }
+    });
+  </script>
+</body>
+</html>

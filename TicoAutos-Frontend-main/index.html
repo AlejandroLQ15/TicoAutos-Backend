@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>TicoAutos - Inicio</title>
+  
+  <link rel="stylesheet" href="css/styles.css">
+  <script>
+    (function () {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        window.location.replace('pages/login.html');
+      }
+    })();
+  </script>
+  
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a href="index.html" class="app-brand">
+          <img src="assets/TicoAutos_Logo.png" alt="TicoAutos" class="app-brand-logo">
+        </a>
+        <nav class="app-nav" id="appNav">
+          <a href="index.html" class="nav-active">Inicio</a>
+          <a href="pages/crear-vehiculo.html">Crear vehículo</a>
+          <a href="pages/inbox.html">Inbox</a>
+          <a href="pages/registro.html">Registro</a>
+          <a href="pages/login.html">Iniciar sesión</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-main dashboard-main">
+      <section class="dashboard-hero">
+        <h1 class="dashboard-hero-title">Bienvenido a TicoAutos</h1>
+        <p class="dashboard-hero-subtitle">
+          Gestiona tu flota de vehículos de forma sencilla. Registra marcas y modelos,
+          consulta el listado y mantén todo organizado en un solo lugar.
+        </p>
+        <a href="pages/crear-vehiculo.html" class="btn btn-primary btn-cta">
+          Crear vehículo
+        </a>
+      </section>
+
+      <section class="dashboard-cards">
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon" aria-hidden="true">🚗</div>
+          <h3 class="dashboard-card-title">Vehículos</h3>
+          <p class="dashboard-card-desc">Registra y consulta todos tus vehículos desde un solo lugar.</p>
+          <a href="pages/vehiculos.html" class="dashboard-card-link">Ir a vehículos →</a>
+        </div>
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon" aria-hidden="true">📋</div>
+          <h3 class="dashboard-card-title">Listado</h3>
+          <p class="dashboard-card-desc">Revisa el listado completo de vehículos registrados.</p>
+          <a href="pages/listado.html" class="dashboard-card-link">Ver listado →</a>
+        </div>
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon" aria-hidden="true">➕</div>
+          <h3 class="dashboard-card-title">Agregar nuevo</h3>
+          <p class="dashboard-card-desc">Añade un vehículo indicando marca y modelo.</p>
+          <a href="pages/crear-vehiculo.html" class="dashboard-card-link">Crear vehículo →</a>
+        </div>
+      </section>
+
+      <section class="dashboard-info card">
+        <h2 class="card-title">¿Cómo empezar?</h2>
+        <ol class="dashboard-steps">
+          <li><strong>Inicia sesión</strong> o regístrate si aún no tienes cuenta.</li>
+          <li>Entra en <strong>Crear vehículo</strong> desde el menú o el botón de arriba.</li>
+          <li>Completa marca y modelo y guarda. Tu vehículo aparecerá en el listado.</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const authToken = localStorage.getItem('authToken');
+      const authUser = localStorage.getItem('authUser');
+      const nav = document.getElementById('appNav');
+      if (authToken && authUser) {
+        nav.innerHTML = '<a href="index.html" class="nav-active">Inicio</a><a href="pages/crear-vehiculo.html">Crear vehículo</a><a href="pages/inbox.html">Inbox</a><a href="#" id="logoutLink" class="nav-logout">Cerrar sesión</a>';
+        document.getElementById('logoutLink').addEventListener('click', e => {
+          e.preventDefault();
+          localStorage.removeItem('authUser');
+          localStorage.removeItem('authToken');
+          window.location.href = 'pages/login.html';
+        });
+      } else {
+        localStorage.removeItem('authUser');
+        localStorage.removeItem('authToken');
+        window.location.replace('pages/login.html');
+      }
+    });
+  </script>
+</body>
+</html>

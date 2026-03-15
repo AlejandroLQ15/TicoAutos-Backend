@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inbox - TicoAutos</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a href="../index.html" class="app-brand">
+          <img src="../assets/TicoAutos_Logo.png" alt="TicoAutos" class="app-brand-logo">
+        </a>
+        <nav class="app-nav" id="appNav">
+          <a href="../index.html">Inicio</a>
+          <a href="crear-vehiculo.html">Crear vehículo</a>
+          <a href="vehiculos.html">Mis vehículos</a>
+          <a href="listado.html">Listado</a>
+          <a href="inbox.html" class="nav-active">Inbox</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <h1 class="page-title">Inbox</h1>
+
+      <section class="card">
+        <h2 class="card-title">Conversaciones en mis vehículos</h2>
+        <p class="section-hint">Historial por vehículo para el propietario.</p>
+        <div id="ownerInbox" class="inbox-list"></div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Mis preguntas realizadas</h2>
+        <p class="section-hint">Aquí ves las preguntas que hiciste como usuario interesado y su respuesta.</p>
+        <ul id="myQuestions" class="conversation-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api';
+    const AUTH_TOKEN_KEY = 'authToken';
+    const AUTH_USER_KEY = 'authUser';
+    const OWNER_INBOX_ERROR = 'No se pudo cargar el inbox del propietario.';
+    const MY_QUESTIONS_ERROR = 'No se pudo cargar tu historial de preguntas.';
+
+    const ownerInboxEl = document.getElementById('ownerInbox');
+    const myQuestionsEl = document.getElementById('myQuestions');
+
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+      const auth = getAuth();
+      if (!auth) return redirectToLogin();
+
+      setupNav();
+      loadInbox(auth);
+    }
+
+    function setupNav() {
+      const nav = document.getElementById('appNav');
+      nav.innerHTML = '<a href="../index.html">Inicio</a><a href="crear-vehiculo.html">Crear vehículo</a><a href="vehiculos.html">Mis vehículos</a><a href="listado.html">Listado</a><a href="inbox.html" class="nav-active">Inbox</a><a href="#" id="logoutLink" class="nav-logout">Cerrar sesión</a>';
+
+      document.getElementById('logoutLink').addEventListener('click', event => {
+        event.preventDefault();
+        clearAuth();
+        redirectToLogin();
+      });
+    }
+
+    function redirectToLogin() {
+      window.location.replace('login.html');
+    }
+
+    function clearAuth() {
+      localStorage.removeItem(AUTH_USER_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+
+    function getAuth() {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      const rawUser = localStorage.getItem(AUTH_USER_KEY);
+      if (!token || !rawUser) return null;
+
+      try {
+        const user = JSON.parse(rawUser);
+        if (!user || Object.keys(user).length === 0) return null;
+        return { token, user };
+      } catch {
+        clearAuth();
+        return null;
+      }
+    }
+
+    function getUserId(user) {
+      return String(user?._id || user?.id || user?.userId || '').trim();
+    }
+
+    function isOwner(auto, userId) {
+      const ownerId = String(auto?.owner_id?._id || auto?.owner_id?.id || auto?.owner_id || '').trim();
+      return Boolean(userId && ownerId && userId === ownerId);
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function normalizeList(payload, keys) {
+      for (const key of keys) {
+        if (Array.isArray(payload?.[key])) return payload[key];
+      }
+      return [];
+    }
+
+    function normalizeObject(payload) {
+      if (!payload || typeof payload !== 'object') return null;
+      return payload.data || payload.answer || payload.auto || payload.question || payload;
+    }
+
+    async function api(path, auth, options = {}) {
+      const url = `${API_BASE}${path}`;
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth.token}`,
+          ...(options.headers || {})
+        }
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.error(`[API ${response.status}] ${options.method || 'GET'} ${url}`, data);
+        if (response.status === 404) {
+          throw new Error(`Ruta no encontrada: ${path} (404). Verifica que el backend esté corriendo.`);
+        }
+        const msg = (typeof data === 'string' && data)
+          || data.message || data.msg || data.error || data.mensaje
+          || (typeof data.error === 'object' ? data.error?.message : '')
+          || (Array.isArray(data.errors) && data.errors.length
+               ? data.errors.map(e => e.msg || e.message || String(e)).join(', ')
+               : '')
+          || `Error ${response.status}`;
+        throw new Error(msg);
+      }
+
+      return data;
+    }
+
+    async function getAnswerForQuestion(auth, questionId) {
+      try {
+        const data = await api(`/answers/question/${questionId}`, auth);
+        return normalizeObject(data);
+      } catch {
+        return null;
+      }
+    }
+
+    async function getMyAutos(auth) {
+      try {
+        const mineData = await api('/autos/mis', auth);
+        return normalizeList(mineData, ['data', 'autos']);
+      } catch {
+        const allData = await api('/autos', auth);
+        const userId = getUserId(auth.user);
+        return normalizeList(allData, ['data', 'autos']).filter(auto => isOwner(auto, userId));
+      }
+    }
+
+    async function renderOwnerInbox(auth) {
+      const myAutos = await getMyAutos(auth);
+      if (!myAutos.length) {
+        ownerInboxEl.innerHTML = '<div class="empty-state">No tienes vehículos publicados, por lo tanto no hay conversaciones como propietario.</div>';
+        return;
+      }
+
+      const blocks = [];
+      for (const auto of myAutos) {
+        const autoId = auto._id || auto.id;
+        if (!autoId) continue;
+
+        const questionsData = await api(`/questions/vehicle/${autoId}`, auth);
+        const questions = normalizeList(questionsData, ['data', 'questions']);
+
+        const items = await Promise.all(questions.map(async question => {
+          const questionId = question._id || question.id;
+          const answer = questionId ? await getAnswerForQuestion(auth, questionId) : null;
+          const questionText = question.pregunta || question.texto || question.texto_pregunta || '';
+          const askedBy = question.usuario_pregunta_id?.nombre || question.usuario_pregunta_id?.username || 'Usuario';
+
+          return `<li class="conversation-item">
+            <div class="conversation-head">
+              <span class="conversation-role">Pregunta de ${escapeHtml(String(askedBy))}</span>
+              <span class="conversation-date">${new Date(question.fecha_pregunta || Date.now()).toLocaleString('es-CR')}</span>
+            </div>
+            <p class="conversation-text">${escapeHtml(questionText)}</p>
+            ${answer ? `<div class="answer-box"><p class="answer-title">Tu respuesta</p><p class="conversation-text">${escapeHtml(answer.texto_respuesta || answer.respuesta || '')}</p><p class="conversation-date">${new Date(answer.fecha_respuesta || Date.now()).toLocaleString('es-CR')}</p></div>` : '<p class="pending-answer">Pendiente de responder.</p>'}
+          </li>`;
+        }));
+
+        const title = `${auto.marca || ''} ${auto.modelo || ''}`.trim();
+        blocks.push(`<article class="inbox-vehicle-block">
+          <h3 class="inbox-vehicle-title">${escapeHtml(title || 'Vehículo')}</h3>
+          <p class="conversation-meta">${auto.anio || ''} · Estado: ${escapeHtml(auto.estado || 'disponible')} · <a href="vehiculo.html?id=${autoId}" class="inline-link">Abrir vista del vehículo</a></p>
+          ${items.length ? `<ul class="conversation-list">${items.join('')}</ul>` : '<div class="empty-inline">Sin preguntas en este vehículo.</div>'}
+        </article>`);
+      }
+
+      ownerInboxEl.innerHTML = blocks.length ? blocks.join('') : '<div class="empty-state">No se encontraron conversaciones para tus vehículos.</div>';
+    }
+
+    async function renderMyQuestions(auth) {
+      const questionsData = await api('/questions/mine', auth);
+      const questions = normalizeList(questionsData, ['data', 'questions']);
+      if (!questions.length) {
+        myQuestionsEl.innerHTML = '<li class="empty-state">Aún no has realizado preguntas.</li>';
+        return;
+      }
+
+      const rendered = await Promise.all(questions.map(async question => {
+        const questionId = question._id || question.id;
+        const answer = questionId ? await getAnswerForQuestion(auth, questionId) : null;
+        const questionText = question.pregunta || question.texto || question.texto_pregunta || '';
+        const vehicleId = question.vehiculo_id?._id || question.vehiculo_id || '';
+        const vehicleName = question.vehiculo_id?.marca || 'Ver detalle';
+
+        return `<li class="conversation-item">
+          <div class="conversation-head">
+            <span class="conversation-role">Tu pregunta</span>
+            <span class="conversation-date">${new Date(question.fecha_pregunta || Date.now()).toLocaleString('es-CR')}</span>
+          </div>
+          <p class="conversation-text">${escapeHtml(questionText)}</p>
+          <p class="conversation-meta">Vehículo: <a class="inline-link" href="vehiculo.html?id=${vehicleId}">${escapeHtml(String(vehicleName))}</a></p>
+          ${answer ? `<div class="answer-box"><p class="answer-title">Respuesta del propietario</p><p class="conversation-text">${escapeHtml(answer.texto_respuesta || answer.respuesta || '')}</p><p class="conversation-date">${new Date(answer.fecha_respuesta || Date.now()).toLocaleString('es-CR')}</p></div>` : '<p class="pending-answer">Aún no has recibido respuesta.</p>'}
+        </li>`;
+      }));
+
+      myQuestionsEl.innerHTML = rendered.join('');
+    }
+
+    async function loadInbox(auth) {
+      try {
+        await renderOwnerInbox(auth);
+        await renderMyQuestions(auth);
+      } catch (err) {
+        console.error(err);
+        ownerInboxEl.innerHTML = `<div class="empty-state">${OWNER_INBOX_ERROR}</div>`;
+        myQuestionsEl.innerHTML = `<li class="empty-state">${MY_QUESTIONS_ERROR}</li>`;
+      }
+    }
+  </script>
+</body>
+</html>

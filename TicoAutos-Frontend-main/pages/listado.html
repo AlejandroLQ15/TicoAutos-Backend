@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Listado de vehículos - TicoAutos</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a href="../index.html" class="app-brand">
+          <img src="../assets/TicoAutos_Logo.png" alt="TicoAutos" class="app-brand-logo">
+        </a>
+        <nav class="app-nav" id="appNav">
+          <a href="../index.html">Inicio</a>
+          <a href="crear-vehiculo.html">Crear vehículo</a>
+          <a href="vehiculos.html">Mis vehículos</a>
+          <a href="listado.html" class="nav-active">Listado</a>
+          <a href="inbox.html">Inbox</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <h1 class="page-title">Listado general</h1>
+
+      <section class="card">
+        <h2 class="card-title">Vehículos registrados</h2>
+        <p class="section-hint">Esta vista muestra todos los vehículos publicados en la plataforma.</p>
+        <ul id="autosList" class="autos-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api';
+    const AUTH_TOKEN_KEY = 'authToken';
+    const AUTH_USER_KEY = 'authUser';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const auth = getAuthContext();
+      if (!auth) {
+        window.location.replace('login.html');
+        return;
+      }
+
+      const nav = document.getElementById('appNav');
+      nav.innerHTML = '<a href="../index.html">Inicio</a><a href="crear-vehiculo.html">Crear vehículo</a><a href="vehiculos.html">Mis vehículos</a><a href="listado.html" class="nav-active">Listado</a><a href="inbox.html">Inbox</a><a href="#" id="logoutLink" class="nav-logout">Cerrar sesión</a>';
+      document.getElementById('logoutLink').addEventListener('click', e => {
+        e.preventDefault();
+        clearAuth();
+        window.location.href = 'login.html';
+      });
+
+      cargarAutos();
+    });
+
+    function clearAuth() {
+      localStorage.removeItem(AUTH_USER_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+
+    function getAuthContext() {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      const rawUser = localStorage.getItem(AUTH_USER_KEY);
+      if (!token || !rawUser) return null;
+      try {
+        const user = JSON.parse(rawUser);
+        if (!user || Object.keys(user).length === 0) return null;
+        return { token, user };
+      } catch {
+        clearAuth();
+        return null;
+      }
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function formatNumber(n) {
+      if (n == null) return '0';
+      return Number(n).toLocaleString('es-CR');
+    }
+
+    async function cargarAutos() {
+      const list = document.getElementById('autosList');
+      const auth = getAuthContext();
+      if (!auth) {
+        window.location.replace('login.html');
+        return;
+      }
+
+      try {
+        const resp = await fetch(`${API_BASE}/autos`, {
+          headers: { 'Authorization': `Bearer ${auth.token}` }
+        });
+
+        const result = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          throw new Error(result.message || 'No se pudieron cargar los vehículos.');
+        }
+
+        const autos = result.data || result.autos || [];
+        if (autos.length === 0) {
+          list.innerHTML = '<li class="empty-state">No hay vehículos publicados por el momento.</li>';
+          return;
+        }
+
+        list.innerHTML = autos.map(auto => {
+          const owner = auto.owner_id;
+          const ownerLabel = owner?.nombre || owner?.username || owner || 'Sin propietario';
+          return `<li class="auto-item">
+            <div>
+              <span class="auto-info">${escapeHtml(auto.marca)} ${escapeHtml(auto.modelo)}</span>
+              <span class="auto-meta">${auto.anio || ''} · ₡${formatNumber(auto.precio)} · ${escapeHtml(auto.estado || 'disponible')} · ${escapeHtml(String(ownerLabel))}</span>
+            </div>
+            <div class="auto-actions"><a class="btn btn-light btn-sm" href="vehiculo.html?id=${auto._id || auto.id}">Ver vehículo</a></div>
+          </li>`;
+        }).join('');
+      } catch (err) {
+        console.error(err);
+        list.innerHTML = `<li class="empty-state">${escapeHtml(err.message || 'Error al cargar vehículos.')}</li>`;
+      }
+    }
+  </script>
+</body>
+</html>
