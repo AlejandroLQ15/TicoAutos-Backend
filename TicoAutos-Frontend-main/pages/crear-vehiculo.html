@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crear vehículo - TicoAutos</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a href="../index.html" class="app-brand">
+          <img src="../assets/TicoAutos_Logo.png" alt="TicoAutos" class="app-brand-logo">
+        </a>
+        <nav class="app-nav" id="appNav">
+          <a href="../index.html">Inicio</a>
+          <a href="crear-vehiculo.html" class="nav-active">Crear vehículo</a>
+          <a href="vehiculos.html">Mis vehículos</a>
+          <a href="listado.html">Listado</a>
+          <a href="inbox.html">Inbox</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <h1 class="page-title">Crear vehículo</h1>
+
+      <section class="card">
+        <h2 class="card-title">Agregar vehículo</h2>
+        <form id="autoForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="marca">Marca</label>
+              <input type="text" id="marca" name="marca" class="form-input" placeholder="Ej. Toyota" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="modelo">Modelo</label>
+              <input type="text" id="modelo" name="modelo" class="form-input" placeholder="Ej. Corolla" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="anio">Año</label>
+              <input type="number" id="anio" name="anio" class="form-input" placeholder="Ej. 2023" min="1900" max="2100" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="precio">Precio (₡)</label>
+              <input type="number" id="precio" name="precio" class="form-input" placeholder="Ej. 15000000" min="0" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="estado">Estado</label>
+            <select id="estado" name="estado" class="form-select">
+              <option value="disponible">Disponible</option>
+              <option value="vendido">Vendido</option>
+            </select>
+          </div>
+          <p id="formFeedback" class="form-feedback" role="alert" aria-live="polite"></p>
+          <button type="submit" class="btn btn-primary">Agregar vehículo</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api';
+    const AUTH_TOKEN_KEY = 'authToken';
+    const AUTH_USER_KEY = 'authUser';
+    const ESTADO_DISPONIBLE = 'disponible';
+    const ESTADO_VENDIDO = 'vendido';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const auth = getAuthContext();
+      if (!auth) {
+        window.location.replace('login.html');
+        return;
+      }
+
+      const nav = document.getElementById('appNav');
+      nav.innerHTML = '<a href="../index.html">Inicio</a><a href="crear-vehiculo.html" class="nav-active">Crear vehículo</a><a href="vehiculos.html">Mis vehículos</a><a href="listado.html">Listado</a><a href="inbox.html">Inbox</a><a href="#" id="logoutLink" class="nav-logout">Cerrar sesión</a>';
+      document.getElementById('logoutLink').addEventListener('click', e => {
+        e.preventDefault();
+        clearAuth();
+        window.location.href = 'login.html';
+      });
+    });
+
+    function clearAuth() {
+      localStorage.removeItem(AUTH_USER_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+
+    function getAuthContext() {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      const rawUser = localStorage.getItem(AUTH_USER_KEY);
+      if (!token || !rawUser) return null;
+      try {
+        const user = JSON.parse(rawUser);
+        if (!user || Object.keys(user).length === 0) return null;
+        return { token, user };
+      } catch {
+        clearAuth();
+        return null;
+      }
+    }
+
+    function setFormFeedback(message) {
+      const feedback = document.getElementById('formFeedback');
+      feedback.textContent = message || '';
+    }
+
+    function validateAutoPayload(payload) {
+      if (!payload.marca || !payload.modelo) {
+        return 'Marca y modelo son obligatorios.';
+      }
+
+      const currentYear = new Date().getFullYear() + 1;
+      if (!Number.isInteger(payload.anio) || payload.anio < 1900 || payload.anio > currentYear) {
+        return `El año debe estar entre 1900 y ${currentYear}.`;
+      }
+
+      if (!Number.isFinite(payload.precio) || payload.precio <= 0) {
+        return 'El precio debe ser un número mayor que 0.';
+      }
+
+      if (![ESTADO_DISPONIBLE, ESTADO_VENDIDO].includes(payload.estado)) {
+        return 'El estado es inválido.';
+      }
+
+      return '';
+    }
+
+    document.getElementById('autoForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const auth = getAuthContext();
+      if (!auth) {
+        alert('Debes iniciar sesión para agregar un vehículo.');
+        window.location.href = 'login.html';
+        return;
+      }
+
+      const payload = {
+        marca: document.getElementById('marca').value.trim(),
+        modelo: document.getElementById('modelo').value.trim(),
+        anio: parseInt(document.getElementById('anio').value, 10),
+        precio: parseFloat(document.getElementById('precio').value),
+        estado: document.getElementById('estado').value || ESTADO_DISPONIBLE
+      };
+
+      const validationError = validateAutoPayload(payload);
+      if (validationError) {
+        setFormFeedback(validationError);
+        return;
+      }
+
+      setFormFeedback('');
+
+      try {
+        const resp = await fetch(`${API_BASE}/autos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${auth.token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          throw new Error(data.message || 'Error al guardar');
+        }
+
+        document.getElementById('autoForm').reset();
+        setFormFeedback('Vehículo registrado con éxito.');
+      } catch (err) {
+        setFormFeedback(err.message || 'Error al agregar vehículo');
+      }
+    });
+  </script>
+</body>
+</html>

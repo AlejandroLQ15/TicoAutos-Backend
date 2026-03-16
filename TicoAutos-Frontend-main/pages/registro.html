@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Registro - TicoAutos</title>
+  
+  <link rel="stylesheet" href="../css/login.css">
+
+</head>
+<body class="auth-page">
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <img src="../assets/TicoAutos_Logo.png" alt="TicoAutos" class="auth-logo-img">
+        <h1 class="auth-title">Crear cuenta</h1>
+        <p class="auth-subtitle">Regístrate para acceder al sistema</p>
+      </div>
+
+      <form id="registroForm" class="auth-form">
+        <div class="form-group">
+          <label class="form-label" for="nombre">Nombre completo</label>
+          <input type="text" id="nombre" name="nombre" class="form-input" placeholder="Tu nombre" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="usuario">Usuario</label>
+          <input type="text" id="usuario" name="usuario" class="form-input" placeholder="Nombre de usuario" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="contrasena">Contraseña</label>
+          <input type="password" id="contrasena" name="contrasena" class="form-input" placeholder="Contraseña segura" required>
+        </div>
+        <button type="submit" class="btn-submit">Crear cuenta</button>
+      </form>
+
+      <div class="auth-footer">
+        <p>¿Ya tienes cuenta? <a href="login.html">Inicia sesión</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const REGISTER_URL = 'http://localhost:3000/api/users/register';
+
+    document.getElementById('registroForm').addEventListener('submit', async function(event) {
+      event.preventDefault();
+      const nombre = document.getElementById('nombre').value.trim();
+      const usuario = document.getElementById('usuario').value.trim();
+      const contrasena = document.getElementById('contrasena').value;
+
+      if (!nombre || !usuario || !contrasena) {
+        alert('Por favor completa todos los campos.');
+        return;
+      }
+
+      try {
+        const resp = await fetch(REGISTER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre, username: usuario, password: contrasena }),
+        });
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => null);
+          throw new Error(errData?.message || 'Error en registro');
+        }
+        alert('Registro exitoso, por favor inicia sesión.');
+        window.location.href = 'login.html';
+      } catch (err) {
+        console.error('Error en registro', err);
+        alert('Hubo un error al registrar: ' + err.message);
+      }
+    });
+  </script>
+</body>
+</html>

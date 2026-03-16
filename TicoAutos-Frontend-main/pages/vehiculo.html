@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vehículo - TicoAutos</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a href="../index.html" class="app-brand">
+          <img src="../assets/TicoAutos_Logo.png" alt="TicoAutos" class="app-brand-logo">
+        </a>
+        <nav class="app-nav" id="appNav">
+          <a href="../index.html">Inicio</a>
+          <a href="crear-vehiculo.html">Crear vehículo</a>
+          <a href="vehiculos.html">Mis vehículos</a>
+          <a href="listado.html">Listado</a>
+          <a href="inbox.html">Inbox</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <h1 class="page-title">Vista del vehículo</h1>
+
+      <section class="card" id="vehiculoCard">
+        <h2 class="card-title">Detalle</h2>
+        <p class="section-hint" id="vehiculoMeta">Cargando información del vehículo...</p>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Preguntas</h2>
+        <p class="section-hint">Sección disponible solo para usuarios autenticados.</p>
+
+        <form id="questionForm" class="question-form">
+          <div class="form-group">
+            <label class="form-label" for="preguntaTexto">Haz una pregunta sobre este vehículo</label>
+            <textarea id="preguntaTexto" class="form-textarea" rows="3" maxlength="300" placeholder="Ej. ¿Cuántos kilómetros tiene actualmente?"></textarea>
+          </div>
+          <p id="questionFeedback" class="form-feedback" role="alert" aria-live="polite"></p>
+          <button type="submit" class="btn btn-primary">Enviar pregunta</button>
+        </form>
+
+        <ul id="questionsList" class="conversation-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api';
+    const AUTH_TOKEN_KEY = 'authToken';
+    const AUTH_USER_KEY = 'authUser';
+    const MIN_QUESTION_LENGTH = 8;
+
+    const vehicleMetaEl = document.getElementById('vehiculoMeta');
+    const questionsListEl = document.getElementById('questionsList');
+    const questionFormEl = document.getElementById('questionForm');
+    const questionInputEl = document.getElementById('preguntaTexto');
+    const feedbackEl = document.getElementById('questionFeedback');
+
+    // Se guarda el ID del dueño al cargar el vehículo para incluirlo en cada pregunta.
+    let currentVehicleOwnerId = '';
+    let currentUserIsVehicleOwner = false;
+
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+      const auth = getAuth();
+      if (!auth) return redirectToLogin();
+
+      setupNav();
+      loadVehiclePage(auth);
+      questionFormEl.addEventListener('submit', event => submitQuestion(event, auth));
+      questionsListEl.addEventListener('submit', event => submitAnswer(event, auth));
+    }
+
+    function setupNav() {
+      const nav = document.getElementById('appNav');
+      nav.innerHTML = '<a href="../index.html">Inicio</a><a href="crear-vehiculo.html">Crear vehículo</a><a href="vehiculos.html">Mis vehículos</a><a href="listado.html">Listado</a><a href="inbox.html">Inbox</a><a href="#" id="logoutLink" class="nav-logout">Cerrar sesión</a>';
+
+      document.getElementById('logoutLink').addEventListener('click', event => {
+        event.preventDefault();
+        clearAuth();
+        redirectToLogin();
+      });
+    }
+
+    function redirectToLogin() {
+      window.location.replace('login.html');
+    }
+
+    function clearAuth() {
+      localStorage.removeItem(AUTH_USER_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+
+    function getAuth() {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      const rawUser = localStorage.getItem(AUTH_USER_KEY);
+      if (!token || !rawUser) return null;
+
+      try {
+        const user = JSON.parse(rawUser);
+        if (!user || Object.keys(user).length === 0) return null;
+        return { token, user };
+      } catch {
+        clearAuth();
+        return null;
+      }
+    }
+
+    function getUserId(user) {
+      return String(user?._id || user?.id || user?.userId || '').trim();
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function formatNumber(n) {
+      if (n == null) return '0';
+      return Number(n).toLocaleString('es-CR');
+    }
+
+    function normalizeList(payload, keys) {
+      for (const key of keys) {
+        if (Array.isArray(payload?.[key])) return payload[key];
+      }
+      return [];
+    }
+
+    function normalizeObject(payload) {
+      if (!payload || typeof payload !== 'object') return null;
+      return payload.data || payload.answer || payload.auto || payload.question || payload;
+    }
+
+    async function api(path, auth, options = {}) {
+      const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth.token}`,
+          ...(options.headers || {})
+        }
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.error(`[API ${response.status}] ${path}`, data);
+        const msg = (typeof data === 'string' && data)
+          || data.message || data.msg || data.error || data.mensaje
+          || (typeof data.error === 'object' ? data.error?.message : '')
+          || (Array.isArray(data.errors) && data.errors.length
+               ? data.errors.map(e => e.msg || e.message || String(e)).join(', ')
+               : '')
+          || `Error ${response.status}`;
+        throw new Error(msg);
+      }
+
+      return data;
+    }
+
+    function getVehiculoIdFromQuery() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('id') || '';
+    }
+
+    async function getVehicleById(auth, vehicleId) {
+      try {
+        const byIdData = await api(`/autos/${vehicleId}`, auth);
+        return normalizeObject(byIdData);
+      } catch {
+        const allData = await api('/autos', auth);
+        const autos = normalizeList(allData, ['data', 'autos']);
+        return autos.find(auto => String(auto._id || auto.id) === String(vehicleId));
+      }
+    }
+
+    async function getAnswerForQuestion(auth, questionId) {
+      try {
+        const answerData = await api(`/answers/question/${questionId}`, auth);
+        return normalizeObject(answerData);
+      } catch {
+        return null;
+      }
+    }
+
+    function setFeedback(message) {
+      feedbackEl.textContent = message || '';
+    }
+
+    function renderQuestions(questions, answersMap, currentUserId) {
+      if (!Array.isArray(questions) || questions.length === 0) {
+        questionsListEl.innerHTML = '<li class="empty-state">Todavía no hay preguntas para este vehículo.</li>';
+        return;
+      }
+
+      questionsListEl.innerHTML = questions.map(question => {
+        const questionId = question._id || question.id;
+        const askedById = String(question.usuario_pregunta_id?._id || question.usuario_pregunta_id?.id || question.usuario_pregunta_id || '').trim();
+        const askedBy = question.usuario_pregunta_id?.nombre || question.usuario_pregunta_id?.username || 'Usuario';
+        const isMine = Boolean(currentUserId && askedById && currentUserId === askedById);
+        const answer = answersMap[questionId];
+        const canAnswer = Boolean(currentUserIsVehicleOwner && !answer && askedById && askedById !== currentUserId);
+
+        return `<li class="conversation-item">
+          <div class="conversation-head">
+            <span class="conversation-role">Pregunta ${isMine ? '(tuya)' : ''}</span>
+            <span class="conversation-date">${new Date(question.fecha_pregunta || Date.now()).toLocaleString('es-CR')}</span>
+          </div>
+          <p class="conversation-text">${escapeHtml(question.pregunta || question.texto || question.texto_pregunta || '')}</p>
+          <p class="conversation-meta">Hecha por: ${escapeHtml(String(askedBy))}</p>
+          ${answer
+            ? `<div class="answer-box"><p class="answer-title">Respuesta</p><p class="conversation-text">${escapeHtml(answer.texto_respuesta || answer.respuesta || '')}</p><p class="conversation-date">${new Date(answer.fecha_respuesta || Date.now()).toLocaleString('es-CR')}</p></div>`
+            : `<p class="pending-answer">Sin respuesta aún.</p>${canAnswer ? `<form class="answer-form" data-question-id="${questionId}" data-asker-id="${askedById}"><div class="form-group"><label class="form-label" for="ans-${questionId}">Responder pregunta</label><textarea id="ans-${questionId}" class="form-textarea" rows="2" maxlength="300" required placeholder="Escribe tu respuesta"></textarea></div><button type="submit" class="btn btn-secondary btn-sm">Responder</button></form>` : ''}`}
+        </li>`;
+      }).join('');
+    }
+
+    async function loadQuestions(auth, vehicleId) {
+      const questionsData = await api(`/questions/vehicle/${vehicleId}`, auth);
+      const questions = normalizeList(questionsData, ['data', 'questions']);
+      const answersMap = {};
+
+      await Promise.all(questions.map(async question => {
+        const questionId = question._id || question.id;
+        if (!questionId) return;
+        const answer = await getAnswerForQuestion(auth, questionId);
+        if (answer) answersMap[questionId] = answer;
+      }));
+
+      renderQuestions(questions, answersMap, getUserId(auth.user));
+    }
+
+    async function loadVehiclePage(auth) {
+      const vehicleId = getVehiculoIdFromQuery();
+      if (!vehicleId) {
+        vehicleMetaEl.textContent = 'No se recibió el identificador del vehículo.';
+        questionsListEl.innerHTML = '<li class="empty-state">Abre esta pantalla desde Mis vehículos o Listado.</li>';
+        questionFormEl.style.display = 'none';
+        return;
+      }
+
+      try {
+        const vehicle = await getVehicleById(auth, vehicleId);
+        if (!vehicle) {
+          throw new Error('No se encontró el vehículo solicitado.');
+        }
+
+        const owner = vehicle.owner_id?.nombre || vehicle.owner_id?.username || 'Sin propietario';
+        vehicleMetaEl.textContent = `${vehicle.marca || ''} ${vehicle.modelo || ''} · ${vehicle.anio || ''} · ₡${formatNumber(vehicle.precio)} · ${vehicle.estado || 'disponible'} · ${owner}`;
+
+        const ownerId = String(vehicle.owner_id?._id || vehicle.owner_id?.id || vehicle.owner_id || '').trim();
+        currentVehicleOwnerId = ownerId;
+        const currentUserId = getUserId(auth.user);
+        currentUserIsVehicleOwner = Boolean(ownerId && currentUserId && ownerId === currentUserId);
+        if (currentUserIsVehicleOwner) {
+          questionFormEl.style.display = 'none';
+          setFeedback('Como propietario, aquí puedes responder preguntas pendientes.');
+        }
+
+        await loadQuestions(auth, vehicleId);
+      } catch (err) {
+        vehicleMetaEl.textContent = err.message || 'Error al cargar el vehículo.';
+        questionsListEl.innerHTML = '<li class="empty-state">No se pudo cargar la conversación del vehículo.</li>';
+      }
+    }
+
+    async function submitQuestion(event, auth) {
+      event.preventDefault();
+      const vehicleId = getVehiculoIdFromQuery();
+      if (!vehicleId) {
+        redirectToLogin();
+        return;
+      }
+
+      const questionText = questionInputEl.value.trim();
+      if (!questionText) {
+        setFeedback('Debes escribir una pregunta antes de enviarla.');
+        return;
+      }
+
+      if (questionText.length < MIN_QUESTION_LENGTH) {
+        setFeedback(`La pregunta debe tener al menos ${MIN_QUESTION_LENGTH} caracteres.`);
+        return;
+      }
+
+      setFeedback('');
+
+      try {
+        // El backend deriva usuario_duenio_id desde vehiculo_id en el controlador.
+        const payload = { vehiculo_id: vehicleId, pregunta: questionText };
+        console.log('[POST /questions] payload:', payload);
+        await api('/questions', auth, { method: 'POST', body: JSON.stringify(payload) });
+
+        questionInputEl.value = '';
+        setFeedback('Pregunta enviada correctamente.');
+        await loadQuestions(auth, vehicleId);
+      } catch (err) {
+        setFeedback(err.message || 'Error al enviar pregunta.');
+      }
+    }
+
+    async function submitAnswer(event, auth) {
+      const form = event.target;
+      if (!form.classList.contains('answer-form')) return;
+      event.preventDefault();
+
+      const questionId = form.dataset.questionId;
+      const askerId = form.dataset.askerId;
+      const vehicleId = getVehiculoIdFromQuery();
+      const textarea = form.querySelector('textarea');
+      const answerText = (textarea?.value || '').trim();
+
+      if (!questionId || !vehicleId) {
+        setFeedback('No se encontró la información de la pregunta a responder.');
+        return;
+      }
+
+      if (answerText.length < 3) {
+        setFeedback('La respuesta debe tener al menos 3 caracteres.');
+        return;
+      }
+
+      try {
+        await api('/answers', auth, {
+          method: 'POST',
+          body: JSON.stringify({
+            pregunta_id: questionId,
+            vehiculo_id: vehicleId,
+            usuario_pregunta_id: askerId,
+            texto_respuesta: answerText
+          })
+        });
+
+        setFeedback('Respuesta enviada correctamente.');
+        await loadQuestions(auth, vehicleId);
+      } catch (err) {
+        setFeedback(err.message || 'Error al responder pregunta.');
+      }
+    }
+  </script>
+</body>
+</html>
