@@ -1,5 +1,6 @@
 // server/index.js
 require('dotenv').config();
+const path = require('path');
 const mongoose = require('mongoose');
 
 //Here you define the URL and the database name
@@ -21,19 +22,25 @@ const express = require('express');// Importa el framework para crear el servido
 const cors = require('cors');// Importa el middleware de seguridad CORS.
 const app = express();// Inicializa la aplicación Express.
 
-// Enable CORS for frontend communication (allow dev origins)
+// Enable CORS for frontend (desarrollo + producción con dominio personalizado)
 const allowedOrigins = [
-  'http://localhost:5173', // Vite / React dev
-  'http://127.0.0.1:5500',  // Live Server / static HTML
-  'http://localhost:3001'   // alternative frontend port
+  'http://localhost:5173',
+  'http://localhost:5500',
+  'http://localhost:3001',
+  'http://127.0.0.1:5500',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3001',
+  'null'
 ];
+// Dominios de producción: define ALLOWED_ORIGINS en .env (ej: https://ticoautos.com,https://www.ticoautos.com)
+const extraOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 app.use(cors({
-  origin: function(origin, callback) {// Permite peticiones que no vienen de un navegador
-    if (!origin) return callback(null, true); // allow non-browser requests
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    }
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
+    if (extraOrigins.indexOf(origin) !== -1) return callback(null, true);
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return callback(null, true);
     return callback(new Error('CORS policy: Origin not allowed'));
   },
   credentials: true
@@ -41,7 +48,15 @@ app.use(cors({
 
 // preflight handled by CORS middleware applied globally
 
-app.use(express.json());
+// No parsear JSON en peticiones multipart para que multer reciba el body intacto (múltiples fotos)
+app.use((req, res, next) => {
+  const ct = (req.headers['content-type'] || '');
+  if (ct.includes('multipart/form-data')) return next();
+  express.json()(req, res, next);
+});
+
+// Archivos subidos (fotos de vehículos y perfiles)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Import and mount user routes
 const userRoutes = require('./routes/users');
