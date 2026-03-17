@@ -39,14 +39,26 @@ const questionPost = async (req, res) => {
 
 const questionGetByVehicle = async (req, res) => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Debes iniciar sesión para ver las preguntas.' });
+    }
+
     const questions = await Question.find({ vehiculo_id: req.params.vehiculoId })
-      .populate('usuario_pregunta_id', 'username nombre')
-      .populate('usuario_duenio_id', 'username nombre')
-      .sort({ fecha_pregunta: -1 });
+      .populate('usuario_pregunta_id', 'username nombre foto_perfil')
+      .populate('usuario_duenio_id', 'username nombre foto_perfil')
+      .sort({ fecha_pregunta: -1 })
+      .lean();
+
+    const filtered = questions.filter(
+      (q) =>
+        String(q.usuario_pregunta_id?._id || q.usuario_pregunta_id) === String(userId) ||
+        String(q.usuario_duenio_id?._id || q.usuario_duenio_id) === String(userId)
+    );
 
     res.status(200).json({
       success: true,
-      data: questions
+      data: filtered
     });
   } catch (error) {
     console.log(error);
@@ -58,7 +70,7 @@ const questionGetMine = async (req, res) => {
   try {
     const questions = await Question.find({ usuario_pregunta_id: req.user.id })
       .populate('vehiculo_id', 'marca modelo anio precio estado')
-      .populate('usuario_duenio_id', 'username nombre')
+      .populate('usuario_duenio_id', 'username nombre foto_perfil')
       .sort({ fecha_pregunta: -1 });
 
     res.status(200).json({

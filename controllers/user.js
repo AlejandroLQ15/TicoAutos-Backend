@@ -32,7 +32,7 @@ const userRegister = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       message: 'User registered successfully',
-      user: { id: user._id, username: user.username, nombre: user.nombre }
+      user: { id: user._id, username: user.username, nombre: user.nombre, foto_perfil: user.foto_perfil || null }
     });
   } catch (error) {
     console.log(error);
@@ -67,7 +67,7 @@ const userLogin = async (req, res) => {
       success: true, 
       message: 'Login successful',
       token,
-      user: { id: user._id, username: user.username, nombre: user.nombre }
+      user: { id: user._id, username: user.username, nombre: user.nombre, foto_perfil: user.foto_perfil || null }
     });
   } catch (error) {
     console.log(error);
@@ -75,4 +75,43 @@ const userLogin = async (req, res) => {
   }
 };
 
-module.exports = { userRegister, userLogin };
+const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ success: false });
+    res.status(200).json({
+      success: true,
+      data: { id: user._id, username: user.username, nombre: user.nombre, foto_perfil: user.foto_perfil || null }
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false });
+  }
+};
+
+const updateMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false });
+
+    if (req.body.nombre !== undefined && String(req.body.nombre).trim()) {
+      user.nombre = String(req.body.nombre).trim();
+    }
+    if (req.file && req.file.filename) {
+      user.foto_perfil = '/uploads/profiles/' + req.file.filename;
+    } else if (req.body.foto_perfil !== undefined) {
+      user.foto_perfil = req.body.foto_perfil ? String(req.body.foto_perfil).trim() : null;
+    }
+
+    await user.save();
+    res.status(200).json({
+      success: true,
+      data: { id: user._id, username: user.username, nombre: user.nombre, foto_perfil: user.foto_perfil || null }
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false });
+  }
+};
+
+module.exports = { userRegister, userLogin, getMe, updateMe };
