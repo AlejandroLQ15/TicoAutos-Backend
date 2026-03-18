@@ -122,3 +122,5 @@ const updateMe = async (req, res) => {
 };
 
 module.exports = { userRegister, userLogin, getMe, updateMe };
+
+// Versión de seguridad forzada: 18-03-2026 1:55 PM
