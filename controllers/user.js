@@ -44,22 +44,27 @@ const userLogin = async (req, res) => {
   const { username, password } = req.body;
   try {
     if (!username || !password) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({ success: false, message: 'Username y password son obligatorios.' });
     }
     
     const user = await User.findOne({ username });
     if (!user) {
-      return res.status(404).json({ success: false });
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
     }
     
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false });
+      return res.status(401).json({ success: false, message: 'Credenciales invalidas.' });
+    }
+
+    const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev_jwt_secret_change_me' : null);
+    if (!jwtSecret) {
+      return res.status(500).json({ success: false, message: 'JWT_SECRET no configurado en el servidor.' });
     }
     
     const token = jwt.sign(
       { id: user._id, username: user.username },
-      process.env.JWT_SECRET,
+      jwtSecret,
       { expiresIn: '24h' }
     );
     
@@ -71,7 +76,11 @@ const userLogin = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false });
+    res.status(500).json({ 
+      success: false, 
+      errorName: error.name,
+      errorMessage: error.message
+    });
   }
 };
 
