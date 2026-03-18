@@ -8,11 +8,7 @@ const protect = (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
-  const jwtSecret = (process.env.JWT_SECRET || process.env.SECRET_KEY || '').trim();
-
-  if (!jwtSecret) {
-    return res.status(500).json({ success: false, message: 'Server auth is not configured.' });
-  }
+  const jwtSecret = (process.env.JWT_SECRET || process.env.SECRET_KEY || 'ticoautos_secret_key_2026').trim();
 
   try {
     const decoded = jwt.verify(token, jwtSecret);
