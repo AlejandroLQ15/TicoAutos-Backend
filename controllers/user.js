@@ -1,7 +1,6 @@
 const User = require('../models/users');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
 
 const userRegister = async (req, res) => {
   try {
@@ -58,7 +57,15 @@ const userLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Credenciales invalidas.' });
     }
 
-    const secret = process.env.JWT_SECRET || 'ticoautos_secret_key_2026';
+    const secret = process.env.JWT_SECRET;
+    console.log('Verificando JWT_SECRET en ejecucion:', secret ? 'RECIBIDO' : 'VACIO');
+
+    if (!secret) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error de configuracion: JWT_SECRET no detectado.'
+      });
+    }
 
     const token = jwt.sign(
       { id: user._id, username: user.username },
