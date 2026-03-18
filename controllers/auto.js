@@ -1,4 +1,5 @@
 const Vehicle = require('../models/vehicule');
+const mongoose = require('mongoose');
 
 const autoPost = async (req, res) => {
   try {
@@ -143,19 +144,23 @@ const autoGetMine = async (req, res) => {
 
 const autoGetById = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Vehiculo no encontrado.' });
+    }
+
     const auto = await Vehicle.findById(req.params.id).populate('owner_id', 'username nombre');
     if (!auto) {
-      return res.status(404).json({ success: false});
+      return res.status(404).json({ success: false, message: 'Vehiculo no encontrado.' });
     }
     
     res.status(200).json({
       success: true,
-      message: 'Auto retrieved successfully',
+      message: 'Vehiculo encontrado.',
       data: auto
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false });
+    res.status(500).json({ success: false, message: 'Error al obtener vehiculo' });
   }
 };
 

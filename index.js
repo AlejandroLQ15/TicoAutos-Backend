@@ -4,7 +4,8 @@ const path = require('path');
 const mongoose = require('mongoose');
 
 //Here you define the URL and the database name
-mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ticoautos'); 
+const mongoURI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ticoautos';
+mongoose.connect(mongoURI);
 
 const database = mongoose.connection;
 
@@ -65,6 +66,10 @@ app.use('/api/users', userRoutes);
 // Import and mount autos routes
 const autosRoutes = require('./routes/autos');
 app.use('/api/autos', autosRoutes);
+
+// Import and mount vehicles public route alias
+const vehiclesRoutes = require('./routes/vehicles');
+app.use('/api/vehicles', vehiclesRoutes);
 
 // Import and mount inbox routes
 const questionsRoutes = require('./routes/questions');
