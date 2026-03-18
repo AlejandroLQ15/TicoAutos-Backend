@@ -58,14 +58,11 @@ const userLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Credenciales invalidas.' });
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      return res.status(500).json({ success: false, message: 'JWT_SECRET no configurado en el servidor.' });
-    }
-    
+    const secret = process.env.JWT_SECRET || 'ticoautos_secret_key_2026';
+
     const token = jwt.sign(
       { id: user._id, username: user.username },
-      jwtSecret,
+      secret,
       { expiresIn: '24h' }
     );
     
