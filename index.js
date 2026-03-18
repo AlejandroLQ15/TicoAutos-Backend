@@ -92,7 +92,8 @@ app.use('/api/answers', answersRoutes);
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
+  const jwtSecret = (process.env.JWT_SECRET || process.env.SECRET_KEY || '').trim();
   console.log(`Server running on port ${PORT}`);
-  console.log('JWT_SECRET presente:', !!process.env.JWT_SECRET);
+  console.log('JWT_SECRET presente:', !!jwtSecret);
   console.log('MONGODB_URI presente:', !!process.env.MONGODB_URI);
 });

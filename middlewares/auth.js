@@ -8,9 +8,14 @@ const protect = (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
+  const jwtSecret = (process.env.JWT_SECRET || process.env.SECRET_KEY || '').trim();
+
+  if (!jwtSecret) {
+    return res.status(500).json({ success: false, message: 'Server auth is not configured.' });
+  }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, jwtSecret);
     req.user = { id: decoded.id, username: decoded.username };
     next();
   } catch (error) {

@@ -57,7 +57,7 @@ const userLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Credenciales invalidas.' });
     }
 
-    const secret = process.env.JWT_SECRET;
+    const secret = (process.env.JWT_SECRET || process.env.SECRET_KEY || '').trim();
     console.log('Verificando JWT_SECRET en ejecucion:', secret ? 'RECIBIDO' : 'VACIO');
 
     if (!secret) {
