@@ -57,7 +57,7 @@ const userLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Credenciales invalidas.' });
     }
 
-    const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev_jwt_secret_change_me' : null);
+    const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
       return res.status(500).json({ success: false, message: 'JWT_SECRET no configurado en el servidor.' });
     }
