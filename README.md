@@ -17,3 +17,5 @@ Luego:
 - npm install cors mongoose
 
 - npm install cors
+
+-npm install passport passport-google-oauth20 express-session

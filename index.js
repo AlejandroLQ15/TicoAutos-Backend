@@ -2,6 +2,9 @@
 require('dotenv').config();
 const path = require('path');
 const mongoose = require('mongoose');
+const session = require('express-session');
+const passport = require('passport');
+require('./controllers/auth'); // registra la estrategia de Google en passport
 
 //Here you define the URL and the database name
 const mongoURI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ticoautos';
@@ -58,6 +61,16 @@ app.use(cors({
   credentials: true
 }));
 
+// Sesión: solo se usa transitoriamente durante el flujo OAuth (no para autenticación JWT)
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'ticoautos_session_secret_2026',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 5 * 60 * 1000 }
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
 // preflight handled by CORS middleware applied globally
 
 // No parsear JSON en peticiones multipart para que multer reciba el body intacto (múltiples fotos)
@@ -69,6 +82,10 @@ app.use((req, res, next) => {
 
 // Archivos subidos (fotos de vehículos y perfiles)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Import and mount auth routes (Google OAuth)
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
 
 // Import and mount user routes
 const userRoutes = require('./routes/users');
