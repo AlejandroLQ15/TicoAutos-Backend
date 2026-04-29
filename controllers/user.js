@@ -62,6 +62,10 @@ const userRegister = async (req, res) => {
     if (!telefono || telefono.trim() === '') {
       return res.status(400).json({ success: false, message: 'El teléfono es obligatorio.' });
     }
+    const normalizedPhone = normalizeCRPhone(telefono.trim());
+    if (!normalizedPhone) {
+      return res.status(400).json({ success: false, message: 'El teléfono debe ser válido (ejemplo: 88001234 o +50688001234).' });
+    }
     if (!username || username.trim() === '') {
       return res.status(400).json({ success: false, message: 'El nombre de usuario es obligatorio.' });
     }
@@ -107,6 +111,8 @@ const userRegister = async (req, res) => {
       cedula:    cedula.trim(),
       email:     email.trim().toLowerCase(),
       telefono:  telefono.trim(),
+      twoFactorEnabled: true,
+      twoFactorPhone: normalizedPhone,
       estado:    'pendiente',
       emailVerificationTokenHash: activationHash,
       emailVerificationExpiresAt:  activationExp,
@@ -213,15 +219,16 @@ const resendActivationEmail = async (req, res) => {
 
 // ── Login: emite JWT directo o inicia flujo 2FA ──────────────────────────────
 const userLogin = async (req, res) => {
-  const { username, password } = req.body;
+  const { email, password } = req.body;
   try {
-    if (!username || !password) {
-      return res.status(400).json({ success: false, message: 'Username y password son obligatorios.' });
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Correo y contraseña son obligatorios.' });
     }
 
-    const user = await User.findOne({ username });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user || !user.password) {
-      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
+      return res.status(404).json({ success: false, message: 'Correo no encontrado.' });
     }
 
     if (user.estado !== 'activo') {
@@ -237,11 +244,17 @@ const userLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Credenciales invalidas.' });
     }
 
-    // ── Si el usuario tiene 2FA habilitado, no entregar JWT final todavía ──
-    if (user.twoFactorEnabled) {
-      const phone = user.twoFactorPhone || normalizeCRPhone(user.telefono);
+    // ── Requerir 2FA cuando exista teléfono válido ─────────────────────────
+    const phone = user.twoFactorPhone || normalizeCRPhone(user.telefono);
+    const shouldUseTwoFactor = Boolean(user.twoFactorEnabled || phone);
+    if (shouldUseTwoFactor) {
       if (!phone) {
         return res.status(422).json({ success: false, message: 'Número de teléfono no configurado para 2FA.' });
+      }
+
+      if (!user.twoFactorEnabled || !user.twoFactorPhone) {
+        user.twoFactorEnabled = true;
+        user.twoFactorPhone = phone;
       }
 
       const otp            = generateOTP();
@@ -261,6 +274,11 @@ const userLogin = async (req, res) => {
         await sendSMSCode({ to: phone, code: otp });
       } catch (smsErr) {
         console.error('[userLogin 2FA] Error enviando SMS:', smsErr.message);
+        return res.status(502).json({
+          success: false,
+          code: 'SMS_SEND_FAILED',
+          message: 'No se pudo enviar el código SMS. Verifica la configuración de Twilio e intenta de nuevo.',
+        });
       }
 
       return res.status(202).json({
@@ -385,6 +403,11 @@ const resend2FACode = async (req, res) => {
       await sendSMSCode({ to: phone, code: otp });
     } catch (smsErr) {
       console.error('[resend2FACode] Error enviando SMS:', smsErr.message);
+      return res.status(502).json({
+        success: false,
+        code: 'SMS_SEND_FAILED',
+        message: 'No se pudo reenviar el código SMS. Verifica Twilio e intenta de nuevo.',
+      });
     }
 
     return res.status(200).json({ success: true, message: 'Nuevo código enviado a tu teléfono.' });
