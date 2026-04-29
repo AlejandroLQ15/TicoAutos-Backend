@@ -58,9 +58,12 @@ const autoGet = async (req, res) => {
       maxAnio,
       minPrecio,
       maxPrecio,
+      minKilometraje,
+      maxKilometraje,
       estado,
       tipoCombustible,
       tipoTransmision,
+      provincia,
       page = 1,
       limit = 10
     } = req.query;
@@ -89,6 +92,14 @@ const autoGet = async (req, res) => {
       const n = parseFloat(maxPrecio);
       if (!Number.isNaN(n)) filter.precio = { ...(filter.precio || {}), $lte: n };
     }
+    if (minKilometraje !== undefined && minKilometraje !== '') {
+      const n = parseInt(minKilometraje, 10);
+      if (!Number.isNaN(n)) filter.kilometraje = { ...(filter.kilometraje || {}), $gte: n };
+    }
+    if (maxKilometraje !== undefined && maxKilometraje !== '') {
+      const n = parseInt(maxKilometraje, 10);
+      if (!Number.isNaN(n)) filter.kilometraje = { ...(filter.kilometraje || {}), $lte: n };
+    }
     if (estado && ['disponible', 'reservado', 'vendido'].includes(String(estado).toLowerCase())) {
       filter.estado = String(estado).toLowerCase();
     }
@@ -97,6 +108,9 @@ const autoGet = async (req, res) => {
     }
     if (tipoTransmision && ['automatico', 'manual'].includes(String(tipoTransmision).toLowerCase())) {
       filter.tipoTransmision = String(tipoTransmision).toLowerCase();
+    }
+    if (provincia && String(provincia).trim() !== '') {
+      filter.provincia = String(provincia).trim();
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
