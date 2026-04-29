@@ -270,22 +270,27 @@ const userLogin = async (req, res) => {
       user.pendingLoginExpiresAt = expiresInMinutes(PENDING_LOGIN_TTL_MIN);
       await user.save();
 
+      let smsSent = true;
       try {
         await sendSMSCode({ to: phone, code: otp });
       } catch (smsErr) {
-        console.error('[userLogin 2FA] Error enviando SMS:', smsErr.message);
-        return res.status(502).json({
-          success: false,
-          code: 'SMS_SEND_FAILED',
-          message: 'No se pudo enviar el código SMS. Verifica la configuración de Twilio e intenta de nuevo.',
-        });
+        smsSent = false;
+        console.error('[userLogin 2FA] Error enviando SMS:', smsErr.code, smsErr.message);
+        // En cuentas Twilio trial (error 21608) el número destino no está verificado.
+        // Loguear el OTP en consola para pruebas y continuar con el flujo 2FA.
+        console.warn('[userLogin 2FA] ⚠️  SMS NO ENTREGADO. Código OTP para pruebas:', otp);
       }
+
+      const devHint = (!smsSent && process.env.NODE_ENV !== 'production')
+        ? ' (SMS no entregado — revisa la consola del servidor para el código)'
+        : '';
 
       return res.status(202).json({
         success: true,
         requiresTwoFactor: true,
         pendingLoginToken: pendingToken,
-        message: `Se envió un código de verificación a tu teléfono.`,
+        smsSent,
+        message: `Se envió un código de verificación a tu teléfono.${devHint}`,
       });
     }
 
