@@ -52,10 +52,13 @@ const autoPost = async (req, res) => {
 const autoGet = async (req, res) => {
   try {
     const {
+      search,
       marca,
       modelo,
+      anio,
       minAnio,
       maxAnio,
+      precio,
       minPrecio,
       maxPrecio,
       minKilometraje,
@@ -70,25 +73,43 @@ const autoGet = async (req, res) => {
 
     const filter = {};
 
+    if (search && String(search).trim() !== '') {
+      const text = String(search).trim();
+      filter.$or = [
+        { marca: new RegExp(text, 'i') },
+        { modelo: new RegExp(text, 'i') }
+      ];
+    }
+
     if (marca && String(marca).trim() !== '') {
       filter.marca = new RegExp(String(marca).trim(), 'i');
     }
     if (modelo && String(modelo).trim() !== '') {
       filter.modelo = new RegExp(String(modelo).trim(), 'i');
     }
-    if (minAnio !== undefined && minAnio !== '') {
+    const hasExactAnio = anio !== undefined && anio !== '';
+    if (hasExactAnio) {
+      const n = parseInt(anio, 10);
+      if (!Number.isNaN(n)) filter.anio = n;
+    }
+    if (!hasExactAnio && minAnio !== undefined && minAnio !== '') {
       const n = parseInt(minAnio, 10);
       if (!Number.isNaN(n)) filter.anio = { ...(filter.anio || {}), $gte: n };
     }
-    if (maxAnio !== undefined && maxAnio !== '') {
+    if (!hasExactAnio && maxAnio !== undefined && maxAnio !== '') {
       const n = parseInt(maxAnio, 10);
       if (!Number.isNaN(n)) filter.anio = { ...(filter.anio || {}), $lte: n };
     }
-    if (minPrecio !== undefined && minPrecio !== '') {
+    const hasExactPrecio = precio !== undefined && precio !== '';
+    if (hasExactPrecio) {
+      const n = parseFloat(precio);
+      if (!Number.isNaN(n)) filter.precio = n;
+    }
+    if (!hasExactPrecio && minPrecio !== undefined && minPrecio !== '') {
       const n = parseFloat(minPrecio);
       if (!Number.isNaN(n)) filter.precio = { ...(filter.precio || {}), $gte: n };
     }
-    if (maxPrecio !== undefined && maxPrecio !== '') {
+    if (!hasExactPrecio && maxPrecio !== undefined && maxPrecio !== '') {
       const n = parseFloat(maxPrecio);
       if (!Number.isNaN(n)) filter.precio = { ...(filter.precio || {}), $lte: n };
     }
