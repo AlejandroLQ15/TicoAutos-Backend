@@ -1,7 +1,9 @@
+//Constantes requeridas: Pregunta, Respuesta y Vehículo.
 const Answer = require('../models/answer');
 const Question = require('../models/question');
 const Vehicle = require('../models/vehicule');
 
+// El dueño del vehículo responde una vez a la pregunta (evita spam de respuestas).
 const answerPost = async (req, res) => {
   try {
     const { pregunta_id, texto_respuesta } = req.body;
@@ -20,7 +22,7 @@ const answerPost = async (req, res) => {
       return res.status(404).json({ success: false });
     }
 
-    // Only the vehicle owner can answer inbox questions.
+    // Solo el dueño del anuncio puede contestar (no otro usuario logueado).
     if (vehiculo.owner_id.toString() !== req.user.id) {
       return res.status(403).json({ success: false });
     }
@@ -50,6 +52,7 @@ const answerPost = async (req, res) => {
   }
 };
 
+// Obtener la respuesta ligada a una pregunta (comprador o vendedor solamente).
 const answerGetByQuestion = async (req, res) => {
   try {
     const userId = req.user?.id;

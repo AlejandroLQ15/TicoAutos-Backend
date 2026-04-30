@@ -1,6 +1,7 @@
 const Question = require('../models/question');
 const Vehicle = require('../models/vehicule');
 
+// Crear pregunta sobre un vehículo (mensaje del chat/inbox hacia el vendedor).
 const questionPost = async (req, res) => {
   try {
     const { pregunta, vehiculo_id } = req.body;
@@ -37,6 +38,7 @@ const questionPost = async (req, res) => {
   }
 };
 
+// Lista preguntas de un auto solo para quien preguntó o el dueño del anuncio (privacidad).
 const questionGetByVehicle = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -66,6 +68,7 @@ const questionGetByVehicle = async (req, res) => {
   }
 };
 
+// Preguntas que yo hice a otros vendedores (mi bandeja como comprador).
 const questionGetMine = async (req, res) => {
   try {
     const questions = await Question.find({ usuario_pregunta_id: req.user.id })
@@ -83,6 +86,7 @@ const questionGetMine = async (req, res) => {
   }
 };
 
+// Las preguntas no se editan por requisito del negocio (historial fiel del chat).
 const questionBlockUpdate = async (req, res) => {
   return res.status(405).json({ success: false });
 };

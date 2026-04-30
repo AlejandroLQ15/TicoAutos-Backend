@@ -1,3 +1,4 @@
+// Registro, login con 2FA por SMS (Twilio), activación por correo (SendGrid) y validación de cédula (API externo).
 const User = require('../models/users');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');

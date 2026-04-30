@@ -1,6 +1,7 @@
 const Vehicle = require('../models/vehicule');
 const mongoose = require('mongoose');
 
+// Publicar un vehículo nuevo (usuario autenticado en req.user); acepta fotos subidas con Multer.
 const autoPost = async (req, res) => {
   try {
     const body = req.body || {};
@@ -21,6 +22,7 @@ const autoPost = async (req, res) => {
       });
     }
 
+    // Rutas públicas bajo /uploads para que el navegador muestre las imágenes.
     const filesList = Array.isArray(req.files) ? req.files : (req.files ? [req.files].flat() : []);
     const fotos = filesList.map((f) => '/uploads/vehicles/' + (f.filename || f.name));
 
@@ -49,6 +51,7 @@ const autoPost = async (req, res) => {
   }
 };
 
+// Listado público con filtros (búsqueda, marca, precio, paginación) para el catálogo.
 const autoGet = async (req, res) => {
   try {
     const {
@@ -72,7 +75,8 @@ const autoGet = async (req, res) => {
     } = req.query;
 
     const filter = {};
-
+    // Se arma un objeto de consulta MongoDB según los query params que vengan en la URL.
+    
     if (search && String(search).trim() !== '') {
       const text = String(search).trim();
       filter.$or = [
@@ -164,6 +168,7 @@ const autoGet = async (req, res) => {
   }
 };
 
+// Autos publicados por el usuario logueado (mis anuncios).
 const autoGetMine = async (req, res) => {
   try {
     const autos = await Vehicle.find({ owner_id: req.user.id }).populate('owner_id', 'username nombre');
@@ -177,6 +182,7 @@ const autoGetMine = async (req, res) => {
   }
 };
 
+// Detalle de un anuncio por id (público).
 const autoGetById = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -199,6 +205,7 @@ const autoGetById = async (req, res) => {
   }
 };
 
+// Borrar solo si el dueño del documento coincide con req.user.
 const autoDelete = async (req, res) => {
   try {
     const auto = await Vehicle.findById(req.params.id);
@@ -222,6 +229,7 @@ const autoDelete = async (req, res) => {
   }
 };
 
+// Actualizar datos del anuncio y, si vienen archivos, reemplazar la galería de fotos.
 const autoPut = async (req, res) => {
   try {
     const auto = await Vehicle.findById(req.params.id);

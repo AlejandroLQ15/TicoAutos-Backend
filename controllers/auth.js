@@ -1,3 +1,4 @@
+// OAuth2 con Google: Passport redirige a Google y al volver crea o enlaza el usuario en MongoDB.
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
