@@ -74,6 +74,8 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Las peticiones OPTIONS (preflight) las atiende el middleware CORS de arriba.
+
 // No parsear JSON en peticiones multipart para que multer reciba el body intacto (múltiples fotos)
 app.use((req, res, next) => {
   const ct = (req.headers['content-type'] || '');
@@ -84,7 +86,7 @@ app.use((req, res, next) => {
 // Archivos subidos (fotos de vehículos y perfiles)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Importa y monta rutas de autenticación, permitiendo a los usuarios registrarse e iniciar sesión con Google OAuth, lo que es fundamental para la experiencia de usuario en TicoAutos al facilitar el acceso sin necesidad de crear una cuenta tradicional.
+// Usuarios: registro, login, 2FA, activación por correo, perfil.
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 
@@ -96,7 +98,7 @@ app.use('/api/users', userRoutes);
 const autosRoutes = require('./routes/autos');
 app.use('/api/autos', autosRoutes);
 
-// Importa y monta rutas de vehículos, permitiendo a los usuarios listar, crear, actualizar y eliminar vehículos en la plataforma, lo que es esencial para el funcionamiento principal de TicoAutos como marketplace de autos usados.
+// “Inbox”: preguntas sobre vehículos (chat entre comprador y vendedor vía la plataforma).
 const vehiclesRoutes = require('./routes/vehicles');
 app.use('/api/vehicles', vehiclesRoutes);
 
