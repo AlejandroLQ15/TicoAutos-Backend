@@ -1,3 +1,4 @@
+// Rutas REST de vehículos (CRUD y listados); el frontend puede usar /api/autos o el alias /api/vehicles.
 const express = require('express');
 const router = express.Router();
 const { autoPost, autoGet, autoGetMine, autoGetById, autoDelete, autoPut } = require('../controllers/auto');

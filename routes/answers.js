@@ -1,3 +1,4 @@
+// Respuestas del vendedor a las preguntas (una respuesta por pregunta).
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middlewares/auth');

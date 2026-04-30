@@ -1,3 +1,4 @@
+// Preguntas tipo “inbox” sobre un vehículo (comunicación dentro de la plataforma).
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middlewares/auth');

@@ -1,3 +1,4 @@
+// Alias de rutas de autos para mantener compatibilidad con clientes que llamen /api/vehicles.
 const express = require('express');
 const router = express.Router();
 const { autoPost, autoGet, autoGetMine, autoGetById, autoDelete, autoPut } = require('../controllers/auto');
