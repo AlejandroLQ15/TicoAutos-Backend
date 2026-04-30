@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Anuncio de vehículo en venta; owner_id enlaza con el usuario que lo publicó.
 const vehicleSchema = new mongoose.Schema({
     marca: { required: true, type: String },
     modelo: { required: true, type: String },

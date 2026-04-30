@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Pregunta de un interesado sobre un auto; enlaza comprador, dueño del anuncio y el vehículo.
 const questionSchema = new mongoose.Schema({
     pregunta: { required: true, type: String, trim: true, immutable: true },
     fecha_pregunta: { type: Date, default: Date.now, immutable: true },

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Respuesta del vendedor a una pregunta (una respuesta por pregunta, por eso pregunta_id es único).
 const answerSchema = new mongoose.Schema({
     texto_respuesta: { required: true, type: String, trim: true },
     fecha_respuesta: { type: Date, default: Date.now },

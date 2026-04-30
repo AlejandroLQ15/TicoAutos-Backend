@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Usuario de la plataforma: registro clásico o Google, estado de cuenta, correo, 2FA por SMS, etc.
 const userSchema = new mongoose.Schema({
     username:   { type: String, unique: true, sparse: true },
     password:   { type: String },
