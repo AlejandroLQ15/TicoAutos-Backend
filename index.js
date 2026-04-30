@@ -1,32 +1,34 @@
-// server/index.js
+// Punto de entrada del backend TicoAutos: API REST, MongoDB, CORS, OAuth Google y rutas.
 require('dotenv').config();
 const path = require('path');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const passport = require('passport');
+// Carga la estrategia de Google (Passport); sin esto no habría login/registro OAuth.
 require('./controllers/auth'); // registra la estrategia de Google en passport
 
-//Here you define the URL and the database name
+//Definicion de URL y nombre de la base de datos MongoDB, con soporte para variables de entorno (desarrollo y producción).
 const mongoURI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ticoautos';
 mongoose.connect(mongoURI);
 
 const database = mongoose.connection;
 
-// Connection error handling //Manejo
+// Manejo de errores de conexión
 database.on('error', (error) => { 
     console.log(error); 
 });
 
-// Confirmation of successful connection
+// Confirmación de conexión exitosa
 database.once('connected', () => {
     console.log('Database Connected');
 });
-// Express setup
+
+// Express instalación y configuración, incluyendo CORS personalizado para desarrollo y producción, sesiones para OAuth y rutas para autenticación, usuarios, autos y preguntas/respuestas.
 const express = require('express');// Importa el framework para crear el servidor.
 const cors = require('cors');// Importa el middleware de seguridad CORS.
 const app = express();// Inicializa la aplicación Express.
 
-// Enable CORS for frontend (desarrollo + producción con dominio personalizado)
+// Habilita CORS con una función personalizada para permitir solo orígenes específicos en desarrollo y producción, incluyendo localhost, dominios definidos en .env y previews de Vercel. Esto protege la API de accesos no autorizados desde otros orígenes.
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5500',
@@ -36,6 +38,7 @@ const allowedOrigins = [
   'http://127.0.0.1:3001',
   'null'
 ];
+
 // Dominios de producción: define ALLOWED_ORIGINS en .env (ej: https://ticoautos.com,https://www.ticoautos.com)
 const extraOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 const allowAllOrigins = (process.env.CORS_ALLOW_ALL || '').toLowerCase() === 'true';
@@ -71,8 +74,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// preflight handled by CORS middleware applied globally
-
 // No parsear JSON en peticiones multipart para que multer reciba el body intacto (múltiples fotos)
 app.use((req, res, next) => {
   const ct = (req.headers['content-type'] || '');
@@ -83,30 +84,30 @@ app.use((req, res, next) => {
 // Archivos subidos (fotos de vehículos y perfiles)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Import and mount auth routes (Google OAuth)
+// Importa y monta rutas de autenticación, permitiendo a los usuarios registrarse e iniciar sesión con Google OAuth, lo que es fundamental para la experiencia de usuario en TicoAutos al facilitar el acceso sin necesidad de crear una cuenta tradicional.
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 
-// Import and mount user routes
+// Importa y monta rutas de usuarios, permitiendo a los usuarios gestionar su perfil, lo que es esencial para la experiencia personalizada en TicoAutos.
 const userRoutes = require('./routes/users');
 app.use('/api/users', userRoutes);
 
-// Import and mount autos routes
+// Importa y monta rutas de autos, permitiendo a los usuarios listar, crear, actualizar y eliminar autos en la plataforma, lo que es esencial para el funcionamiento principal de TicoAutos como marketplace de autos usados.
 const autosRoutes = require('./routes/autos');
 app.use('/api/autos', autosRoutes);
 
-// Import and mount vehicles public route alias
+// Importa y monta rutas de vehículos, permitiendo a los usuarios listar, crear, actualizar y eliminar vehículos en la plataforma, lo que es esencial para el funcionamiento principal de TicoAutos como marketplace de autos usados.
 const vehiclesRoutes = require('./routes/vehicles');
 app.use('/api/vehicles', vehiclesRoutes);
 
-// Import and mount inbox routes
+// Importa y monta rutas de preguntas y respuestas, permitiendo a los usuarios interactuar con preguntas sobre vehículos, lo que fomenta la comunidad y el intercambio de información entre compradores y vendedores.
 const questionsRoutes = require('./routes/questions');
 app.use('/api/questions', questionsRoutes);
 
 const answersRoutes = require('./routes/answers');
 app.use('/api/answers', answersRoutes);
 
-// Start server
+// Inicializa servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   const jwtSecret = (process.env.JWT_SECRET || process.env.SECRET_KEY || '').trim();
