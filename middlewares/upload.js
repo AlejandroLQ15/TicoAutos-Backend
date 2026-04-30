@@ -1,3 +1,4 @@
+// Subida de archivos con Multer: fotos de vehículos y foto de perfil (límites de tamaño y tipo).
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -17,6 +18,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
+    // Solo imágenes web habituales; evita subir ejecutables u otros tipos.
   const allowed = /^image\/(jpeg|jpg|png|gif|webp)$/i;
   if (allowed.test(file.mimetype)) return cb(null, true);
   cb(new Error('Solo se permiten imágenes (JPEG, PNG, GIF, WebP).'), false);
@@ -28,6 +30,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
+// Si el body es multipart, procesa hasta 10 fotos; si no, sigue sin tocar el body (JSON).
 function optionalMulter(req, res, next) {
   const isMultipart = (req.headers['content-type'] || '').includes('multipart/form-data');
   if (!isMultipart) return next();
@@ -51,6 +54,7 @@ const storageProfile = multer.diskStorage({
 });
 const uploadProfile = multer({ storage: storageProfile, fileFilter, limits: { fileSize: 2 * 1024 * 1024 } });
 
+// Igual que optionalMulter pero un solo archivo para el campo foto_perfil del perfil.
 function optionalMulterProfile(req, res, next) {
   const isMultipart = (req.headers['content-type'] || '').includes('multipart/form-data');
   if (!isMultipart) return next();

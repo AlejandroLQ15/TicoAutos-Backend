@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 
+// Protege rutas: exige header Authorization: Bearer <JWT> y deja req.user listo para los controladores.
 const protect = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -12,6 +13,7 @@ const protect = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, jwtSecret);
+        // Mismo payload que emiten login, Google callback y verify-2FA (id + username).
     req.user = { id: decoded.id, username: decoded.username };
     next();
   } catch (error) {
