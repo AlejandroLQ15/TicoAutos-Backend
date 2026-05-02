@@ -4,20 +4,92 @@
  * Variables:
  *   OPENAI_API_KEY                      — obligatoria en producción
  *   OPENAI_CHAT_MODERATION_MODEL        — opcional, default gpt-4o-mini
- *   OPENAI_CHAT_MODERATION_DISABLED     — si es "true", omite la llamada (solo desarrollo local)
+ *   OPENAI_CHAT_MODERATION_DISABLED     — si es "true" y no hay API key, solo aplica el filtro
+ *     heurístico local (tel/correo/enlaces). Con API key, OpenAI siempre corre después del heurístico.
  */
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const MAX_CHARS = 2800;
 
-const BASE_POLICY = `Eres moderador de un marketplace de vehículos en Costa Rica (TicoAutos).
-Los interesados y vendedores deben coordinar solo dentro de la plataforma: no pueden intercambiar datos de contacto directo.
+const CONTACT_BLOCK_MSG =
+  'Por políticas de la plataforma no podés compartir teléfonos, correos ni enlaces para coordinar fuera del chat. Negociá la visita o los detalles aquí, sin datos de contacto personales.';
 
-Rechaza (allow: false) si el texto intenta compartir o pedir: teléfonos, correos, WhatsApp/Telegram/Signal, @ de redes, enlaces a perfiles o chats externos, "escríbeme al", "te paso mi número", direcciones muy específicas para quedar fuera de la app, o cualquier forma de salirse de la plataforma para negociar.
+const BASE_POLICY = `Eres moderador de un marketplace de vehículos en Costa Rica (TicoAutos), con política tipo Airbnb: comprador y vendedor solo pueden coordinar dentro de la plataforma.
 
-Permite (allow: true) preguntas y respuestas sobre el auto, precio en abstracto, estado, documentación, disponibilidad, provincia genérica, citas del tipo "¿puedo verlo?" sin incluir teléfono ni usuario de red social.
+RECHAZA siempre (allow: false) si el mensaje de cualquier forma intenta compartir o pedir:
+- Teléfonos en cualquier formato: con +506, 506, espacios, guiones, paréntesis, puntos entre dígitos, número escrito con palabras ("ocho tres uno seis..."), "código de país", "prefijo", "extensión", "me llamás al", "te dejo el cel", "mi línea", "WhatsApp", "Waze al número", etc.
+- Correos electrónicos, dominios tipo gmail/hotmail/outlook/yahoo, o pedir "mandame un mail".
+- Usuarios de redes (@usuario, "seguime en insta", "buscame en FB", TikTok, Telegram, Signal, X/Twitter).
+- Enlaces a chats externos (wa.me, api.whatsapp.com, t.me, telegram.me, linktr.ee, etc.) o "te paso el link".
+- Direcciones físicas muy específicas para verse fuera del contexto del anuncio (calle, número de casa, punto de encuentro con coordenadas).
+- Cualquier truco para evadir: letras entre números, "línea nueva", "te lo dicto", "te lo paso en privado", "mirá mi perfil".
 
-Responde únicamente con un objeto JSON válido: {"allow":true} o {"allow":false,"reason":"mensaje breve y cordial en español para mostrar al usuario"}.`;
+PERMITE (allow: true) solo contenido sobre el vehículo: estado, mecánica, documentación, precio en abstracto, disponibilidad, provincia general, si acepta financiamiento, "¿puedo verlo?" o "¿hacés prueba de manejo?" sin pedir teléfono ni red social.
+
+Ante la duda entre permitir un dato que podría usarse para contacto fuera de la app, RECHAZÁ.
+
+Responde únicamente con JSON válido: {"allow":true} o {"allow":false,"reason":"mensaje breve y cordial en español para mostrar al usuario"}.`;
+
+/**
+ * Quita separadores invisibles que a veces se usan para colar dígitos.
+ * @param {string} s
+ */
+function stripInvisibleSeparators(s) {
+  return String(s).replace(/[\u200B-\u200D\uFEFF]/g, '');
+}
+
+/**
+ * Bloqueo determinístico (primera línea de defensa): detecta correos, 506+8 dígitos,
+ * patrones internacionales obvios y enlaces típicos a WhatsApp/Telegram.
+ * Siempre se aplica antes de OpenAI y no se omite con OPENAI_CHAT_MODERATION_DISABLED.
+ * @param {string} text
+ * @returns {{ allowed: false, message: string } | null}
+ */
+function heuristicContactBlock(text) {
+  const raw = stripInvisibleSeparators(String(text || ''));
+  const t = raw.normalize('NFC');
+  const lower = t.toLowerCase();
+
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(t)) {
+    return { allowed: false, message: CONTACT_BLOCK_MSG };
+  }
+
+  const digits = t.replace(/\D/g, '');
+  // Costa Rica: 506 + 8 dígitos (celular fijo o móvil local)
+  if (/506[2-9]\d{7}/.test(digits)) {
+    return { allowed: false, message: CONTACT_BLOCK_MSG };
+  }
+
+  // EE.UU./Canadá +1 + 10 dígitos
+  if (/^1\d{10}$/.test(digits) && /\+?\s*1[\s().-]*\d{3}/.test(t)) {
+    return { allowed: false, message: CONTACT_BLOCK_MSG };
+  }
+
+  // + internacional largo en el texto original (evita depender solo de 506)
+  if (/\+\d{1,3}[\d\s().-]{8,18}\d{2}/.test(t)) {
+    return { allowed: false, message: CONTACT_BLOCK_MSG };
+  }
+
+  const externalChat =
+    /\b(wa\.me|api\.whatsapp|whatsapp\.com|t\.me\/|telegram\.me|telegram\.org|signal\.me)\b/i.test(
+      lower
+    );
+  if (externalChat) {
+    return { allowed: false, message: CONTACT_BLOCK_MSG };
+  }
+
+  const contactCue =
+    /\b(n[uú]mero|numero|celular|cel\.|m[óo]vil|tel[eé]fono|telefono|whatsapp|wsp|wassap|telegram|signal|llam(a|ame|ar|emos)|escrib(i|í|ime|inos)|contact(o|ame)|correo|email|gmail|hotmail|outlook|yahoo|coordina(r|mos)\s+(por\s+)?(fuera|whatsapp|wsp|tel[eé]fono|llamada))\b/i.test(
+      t
+    );
+
+  // Sin 506 explícito: si suena a contacto y hay dos grupos de 4 dígitos (típico celular CR)
+  if (contactCue && /\b\d{4}[\s.-]\d{4}\b/.test(t)) {
+    return { allowed: false, message: CONTACT_BLOCK_MSG };
+  }
+
+  return null;
+}
 
 function systemPrompt(kind) {
   const role =
@@ -67,10 +139,17 @@ async function moderateOutboundChatText(text, opts = {}) {
     return { allowed: false, message: 'El mensaje es demasiado largo. Acórtalo e intenta de nuevo.' };
   }
 
+  const blockedLocal = heuristicContactBlock(trimmed);
+  if (blockedLocal) {
+    return blockedLocal;
+  }
+
   const apiKey = (process.env.OPENAI_API_KEY || '').trim();
   if (!apiKey) {
     if (process.env.OPENAI_CHAT_MODERATION_DISABLED === 'true') {
-      console.warn('[messageGuard] OPENAI_CHAT_MODERATION_DISABLED=true — no se aplicó moderación.');
+      console.warn(
+        '[messageGuard] Sin OPENAI_API_KEY y OPENAI_CHAT_MODERATION_DISABLED=true — solo pasó el filtro heurístico (tel/correo/enlaces). Configurá OPENAI_API_KEY para moderación completa con IA.'
+      );
       return { allowed: true };
     }
     const err = new Error('OPENAI_API_KEY no está configurada.');
