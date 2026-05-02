@@ -2,6 +2,7 @@
 const Answer = require('../models/answer');
 const Question = require('../models/question');
 const Vehicle = require('../models/vehicule');
+const { moderateOutboundChatText } = require('../services/ai/messageGuard');
 
 // El dueño del vehículo responde una vez a la pregunta (evita spam de respuestas).
 const answerPost = async (req, res) => {
