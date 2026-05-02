@@ -1,5 +1,6 @@
 const Question = require('../models/question');
 const Vehicle = require('../models/vehicule');
+const { moderateOutboundChatText } = require('../services/ai/messageGuard');
 
 // Crear pregunta sobre un vehículo (mensaje del chat/inbox hacia el vendedor).
 const questionPost = async (req, res) => {
@@ -7,7 +8,7 @@ const questionPost = async (req, res) => {
     const { pregunta, vehiculo_id } = req.body;
 
     if (!pregunta || !vehiculo_id) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({ success: false, message: 'Indicá la pregunta y el vehículo.' });
     }
 
     const vehiculo = await Vehicle.findById(vehiculo_id);
@@ -17,6 +18,28 @@ const questionPost = async (req, res) => {
 
     if (!vehiculo.owner_id) {
       return res.status(500).json({ success: false, message: 'El vehículo no tiene dueño registrado' });
+    }
+
+    let moderation;
+    try {
+      moderation = await moderateOutboundChatText(pregunta, { kind: 'question' });
+    } catch (modErr) {
+      console.error('[questionPost] Moderación:', modErr.message);
+      return res.status(503).json({
+        success: false,
+        code: 'MODERATION_UNAVAILABLE',
+        message:
+          modErr.code === 'OPENAI_NOT_CONFIGURED'
+            ? 'El servicio de revisión de mensajes no está configurado. Contactá al administrador.'
+            : 'No pudimos revisar tu mensaje en este momento. Intentá de nuevo en unos minutos.',
+      });
+    }
+    if (!moderation.allowed) {
+      return res.status(422).json({
+        success: false,
+        code: 'MESSAGE_MODERATION',
+        message: moderation.message,
+      });
     }
 
     const nuevaPregunta = new Question({
