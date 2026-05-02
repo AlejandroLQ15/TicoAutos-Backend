@@ -1,4 +1,3 @@
-//Constantes requeridas: Pregunta, Respuesta y Vehículo.
 const Answer = require('../models/answer');
 const Question = require('../models/question');
 const Vehicle = require('../models/vehicule');
@@ -10,7 +9,7 @@ const answerPost = async (req, res) => {
     const { pregunta_id, texto_respuesta } = req.body;
 
     if (!pregunta_id || !texto_respuesta) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({ success: false, message: 'Indicá la pregunta y el texto de la respuesta.' });
     }
 
     const pregunta = await Question.findById(pregunta_id);
@@ -30,7 +29,29 @@ const answerPost = async (req, res) => {
 
     const existingAnswer = await Answer.findOne({ pregunta_id });
     if (existingAnswer) {
-      return res.status(409).json({ success: false });
+      return res.status(409).json({ success: false, message: 'Esta pregunta ya tiene una respuesta.' });
+    }
+
+    let moderation;
+    try {
+      moderation = await moderateOutboundChatText(texto_respuesta, { kind: 'answer' });
+    } catch (modErr) {
+      console.error('[answerPost] Moderación:', modErr.message);
+      return res.status(503).json({
+        success: false,
+        code: 'MODERATION_UNAVAILABLE',
+        message:
+          modErr.code === 'OPENAI_NOT_CONFIGURED'
+            ? 'El servicio de revisión de mensajes no está configurado. Contactá al administrador.'
+            : 'No pudimos revisar tu mensaje en este momento. Intentá de nuevo en unos minutos.',
+      });
+    }
+    if (!moderation.allowed) {
+      return res.status(422).json({
+        success: false,
+        code: 'MESSAGE_MODERATION',
+        message: moderation.message,
+      });
     }
 
     const nuevaRespuesta = new Answer({
