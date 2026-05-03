@@ -1,0 +1,19 @@
+# Servicio de cédulas en tu propia red Docker.
+# Uso: docker compose -f docker-compose.cedula.yml up -d --build
+#
+# Luego en el .env del backend TicoAutos:
+#   CEDULA_API_URL=http://127.0.0.1:8787/cedulas
+# (desde el host). Si el backend también corre en Docker en la misma red,
+# usa el hostname del servicio: http://ticoautos-cedula-api:8787/cedulas
+
+services:
+  ticoautos-cedula-api:
+    build: ./deploy/cedula-api
+    container_name: ticoautos-cedula-api
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      CEDULA_UPSTREAM_BASE: "https://apis.gometa.org/cedulas"
+      CEDULA_UPSTREAM_TIMEOUT_MS: "12000"
+    restart: unless-stopped

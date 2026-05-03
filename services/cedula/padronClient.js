@@ -22,18 +22,34 @@ function buildCedulaRequestUrl(cedula9) {
   return `${raw.replace(/\/$/, '')}/${cedula9}`;
 }
 
+const defaultTimeoutMs = () =>
+  Math.max(3000, parseInt(process.env.CEDULA_API_TIMEOUT_MS || '12000', 10));
+
 /**
  * @param {string} cedula9
  * @returns {Promise<{ status: number, data: object, error?: string }>}
  */
 async function fetchPadronByCedula(cedula9) {
   const url = buildCedulaRequestUrl(cedula9);
+  const ms = defaultTimeoutMs();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'User-Agent': 'TicoAutos-Backend/1.0' },
+    });
     const data = await response.json().catch(() => ({}));
     return { status: response.status, data };
   } catch (err) {
-    return { status: 0, data: {}, error: err.message || 'network' };
+    const aborted = err.name === 'AbortError';
+    return {
+      status: 0,
+      data: {},
+      error: aborted ? `timeout_after_${ms}ms` : err.message || 'network',
+    };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

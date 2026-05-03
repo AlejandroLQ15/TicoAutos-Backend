@@ -146,18 +146,20 @@ const userRegister = async (req, res) => {
     });
     await user.save();
 
-    // Enviar correo de activación (no bloquea si falla)
     const activationUrl = `${frontendUrl()}/pages/verificar-email.html?token=${activationToken}`;
-    try {
-      await sendActivationEmail({ to: user.email, nombre: user.nombre, activationUrl });
-    } catch (mailErr) {
-      console.error('[userRegister] Error enviando correo de activación:', mailErr.message);
+    const mailResult = await sendActivationEmail({ to: user.email, nombre: user.nombre, activationUrl });
+    if (!mailResult.delivered && mailResult.operatorMessage) {
+      console.error('[userRegister]', mailResult.operatorMessage);
     }
 
     return res.status(201).json({
       success: true,
       pendingActivation: true,
-      message: 'Cuenta creada. Revisa tu correo para activarla.',
+      activationEmailSent: mailResult.delivered,
+      message: mailResult.delivered
+        ? 'Cuenta creada. Te enviamos un correo para activarla; revisa también la carpeta de spam.'
+        : 'Cuenta creada. Tu correo de activación podría tardar un poco o no haberse enviado: revisa spam o usa «Reenviar» desde la pantalla siguiente.',
+      ...(mailResult.userHint ? { activationEmailNote: mailResult.userHint } : {}),
     });
   } catch (error) {
     console.error(error);
@@ -230,12 +232,11 @@ const resendActivationEmail = async (req, res) => {
     await user.save();
 
     const activationUrl = `${frontendUrl()}/pages/verificar-email.html?token=${activationToken}`;
-    try {
-      await sendActivationEmail({ to: user.email, nombre: user.nombre, activationUrl });
-    } catch (mailErr) {
-      console.error('[resendActivationEmail] Error enviando correo:', mailErr.message);
+    const mailResult = await sendActivationEmail({ to: user.email, nombre: user.nombre, activationUrl });
+    if (!mailResult.delivered && mailResult.operatorMessage) {
+      console.error('[resendActivationEmail]', mailResult.operatorMessage);
     }
-
+    // Respuesta siempre genérica (no filtrar si el correo existe ni si el envío falló).
     return res.status(200).json(genericOk);
   } catch (error) {
     console.error('[resendActivationEmail]', error);

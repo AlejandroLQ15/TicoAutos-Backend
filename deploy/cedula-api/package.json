@@ -1,0 +1,16 @@
+{
+  "name": "ticoautos-cedula-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sidecar HTTP compatible con GET /cedulas/:numero — pensado para ejecutarse en tu infra (Docker) y apuntar desde CEDULA_API_URL.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

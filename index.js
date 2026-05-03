@@ -109,6 +109,8 @@ app.use('/api/questions', questionsRoutes);
 const answersRoutes = require('./routes/answers');
 app.use('/api/answers', answersRoutes);
 
+const { logSendGridStartup } = require('./services/email/sendgridConfig');
+
 // Inicializa servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
@@ -116,4 +118,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('JWT_SECRET presente:', !!jwtSecret);
   console.log('MONGODB_URI presente:', !!process.env.MONGODB_URI);
+  logSendGridStartup();
 });
