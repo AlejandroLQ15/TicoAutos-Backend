@@ -1,8 +1,14 @@
-// Registro, login con 2FA por SMS (Twilio), activación por correo (SendGrid) y validación de cédula (API externo).
+// Registro, login con 2FA por SMS (Twilio), activación por correo (SendGrid), cédula (padrón) y mayoría de edad (política CR).
 const User = require('../models/users');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { generateToken, generateOTP, hashToken, expiresInMinutes, expiresInHours, normalizeCRPhone } = require('../utils/security/tokens');
+const {
+  extractBirthDateFromPadronPayload,
+  resolveBirthDateForRegistration,
+  assertMeetsMinimumAge,
+} = require('../utils/agePolicy');
+const { fetchPadronByCedula } = require('../services/cedula/padronClient');
 const { sendActivationEmail } = require('../services/email/sendgrid');
 const { sendSMSCode } = require('../services/sms/twilio');
 
@@ -18,28 +24,34 @@ const PENDING_LOGIN_TTL_MIN  = MFA_TTL_MINUTES + 2; // algo más que el OTP
 const jwtSecret = () => (process.env.JWT_SECRET || process.env.SECRET_KEY || 'ticoautos_secret_key_2026').trim();
 const frontendUrl = () => (process.env.FRONTEND_URL || 'http://127.0.0.1:5500').replace(/\/$/, '');
 
-// Consulta el API de cédulas externo y devuelve el nombre completo
+/**
+ * GET /api/users/cedula/:cedula — Datos públicos del padrón para autocompletar el formulario.
+ * Incluye fechaNacimiento solo si el JSON del padrón la trae (muchas fuentes no la exponen).
+ */
 const getCedulaInfo = async (req, res) => {
   const { cedula } = req.params;
   if (!/^\d{9}$/.test(cedula)) {
     return res.status(400).json({ success: false, message: 'Formato de cédula inválido. Debe tener 9 dígitos.' });
   }
   try {
-    const apiBase = (process.env.CEDULA_API_URL || 'https://apis.gometa.org/cedulas').replace(/\/$/, '');
-    const response = await fetch(`${apiBase}/${cedula}`);
-    if (!response.ok) {
+    const { status, data, error } = await fetchPadronByCedula(cedula);
+    if (error || status >= 500) {
+      return res.status(503).json({ success: false, message: 'Servicio de validación de cédulas no disponible.' });
+    }
+    if (!data || data.resultcount === 0) {
       return res.status(404).json({ success: false, message: 'Cédula no encontrada en el padrón electoral.' });
     }
-    const data = await response.json();
-    // Compatibilidad con gometa.org: data.nombre o data.results[0].firstname + lastnames
     const nombre = data.nombre ||
       (data.results?.[0]
         ? [data.results[0].firstname, data.results[0].lastname1, data.results[0].lastname2].filter(Boolean).join(' ')
         : '');
-    if (!nombre || data.resultcount === 0) {
+    if (!nombre) {
       return res.status(404).json({ success: false, message: 'Cédula no encontrada en el padrón electoral.' });
     }
-    res.json({ success: true, nombre });
+    const fechaNacimiento = extractBirthDateFromPadronPayload(data);
+    const payload = { success: true, nombre };
+    if (fechaNacimiento) payload.fechaNacimiento = fechaNacimiento;
+    res.json(payload);
   } catch (error) {
     console.error('Error consultando API de cédulas:', error.message);
     res.status(503).json({ success: false, message: 'Servicio de validación de cédulas no disponible.' });
@@ -81,20 +93,31 @@ const userRegister = async (req, res) => {
       return res.status(409).json({ success: false, message: 'El correo ya está registrado.' });
     }
 
-    // Validar cédula con el API externo del padrón electoral
-    try {
-      const apiBase = (process.env.CEDULA_API_URL || 'https://apis.gometa.org/cedulas').replace(/\/$/, '');
-      const cedulaRes = await fetch(`${apiBase}/${cedula.trim()}`);
-      if (!cedulaRes.ok) {
-        return res.status(400).json({ success: false, message: 'La cédula no existe en el padrón electoral.' });
-      }
-      const cedulaData = await cedulaRes.json();
-      if (!cedulaData.resultcount || cedulaData.resultcount === 0) {
-        return res.status(400).json({ success: false, message: 'La cédula no existe en el padrón electoral.' });
-      }
-    } catch (cedulaErr) {
-      console.error('No se pudo conectar al API de cédulas:', cedulaErr.message);
+    // Padrón electoral + mayoría de edad (fecha del API o declarada con confirmación)
+    const padron = await fetchPadronByCedula(cedula.trim());
+    if (padron.error || padron.status >= 500) {
+      console.error('No se pudo conectar al API de cédulas:', padron.error || padron.status);
       return res.status(503).json({ success: false, message: 'Servicio de validación de cédulas no disponible.' });
+    }
+    if (!padron.data || !padron.data.resultcount || padron.data.resultcount === 0) {
+      return res.status(400).json({ success: false, message: 'La cédula no existe en el padrón electoral.' });
+    }
+
+    const birthResolution = resolveBirthDateForRegistration({
+      padronJson: padron.data,
+      declaredDate: req.body.fechaNacimiento,
+      declaracionAceptada: req.body.declaracionFechaNacimiento,
+    });
+    if (!birthResolution.ok) {
+      return res.status(400).json({
+        success: false,
+        code: birthResolution.code,
+        message: birthResolution.message,
+      });
+    }
+    const ageGate = assertMeetsMinimumAge(birthResolution.birthIso);
+    if (!ageGate.ok) {
+      return res.status(400).json({ success: false, code: ageGate.code, message: ageGate.message });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -110,6 +133,8 @@ const userRegister = async (req, res) => {
       password:  hashedPassword,
       nombre:    nombre.trim(),
       cedula:    cedula.trim(),
+      fechaNacimiento: birthResolution.birthIso,
+      birthDateSource: birthResolution.source,
       email:     email.trim().toLowerCase(),
       telefono:  telefono.trim(),
       twoFactorEnabled: true,
@@ -243,6 +268,13 @@ const userLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Credenciales invalidas.' });
+    }
+
+    if (user.fechaNacimiento) {
+      const ageGate = assertMeetsMinimumAge(user.fechaNacimiento);
+      if (!ageGate.ok) {
+        return res.status(403).json({ success: false, code: ageGate.code, message: ageGate.message });
+      }
     }
 
     // ── Requerir 2FA cuando exista teléfono válido ─────────────────────────

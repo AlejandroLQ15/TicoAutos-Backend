@@ -3,6 +3,9 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
 const User = require('../models/users');
+const { fetchPadronByCedula } = require('../services/cedula/padronClient');
+const { resolveBirthDateForRegistration, assertMeetsMinimumAge } = require('../utils/agePolicy');
+const { normalizeCRPhone } = require('../utils/security/tokens');
 
 // ─── Passport Google Strategy ────────────────────────────────────────────────
 // Solo se inicializa si las credenciales de Google están configuradas en .env
@@ -123,28 +126,47 @@ const googleRegister = async (req, res) => {
       return res.status(409).json({ success: false, message: 'El correo ya está registrado.' });
     }
 
-    // Validar cédula con el API externo
-    try {
-      const apiBase = (process.env.CEDULA_API_URL || 'https://apis.gometa.org/cedulas').replace(/\/$/, '');
-      const cedulaRes = await fetch(`${apiBase}/${cedula.trim()}`);
-      if (!cedulaRes.ok) {
-        return res.status(400).json({ success: false, message: 'La cédula no existe en el padrón electoral.' });
-      }
-      const cedulaData = await cedulaRes.json();
-      if (!cedulaData.resultcount || cedulaData.resultcount === 0) {
-        return res.status(400).json({ success: false, message: 'La cédula no existe en el padrón electoral.' });
-      }
-    } catch (cedulaErr) {
-      console.error('No se pudo conectar al API de cédulas:', cedulaErr.message);
+    const padron = await fetchPadronByCedula(cedula.trim());
+    if (padron.error || padron.status >= 500) {
+      console.error('[googleRegister] API cédulas:', padron.error || padron.status);
       return res.status(503).json({ success: false, message: 'Servicio de validación de cédulas no disponible.' });
+    }
+    if (!padron.data || !padron.data.resultcount || padron.data.resultcount === 0) {
+      return res.status(400).json({ success: false, message: 'La cédula no existe en el padrón electoral.' });
+    }
+
+    const birthResolution = resolveBirthDateForRegistration({
+      padronJson: padron.data,
+      declaredDate: req.body.fechaNacimiento,
+      declaracionAceptada: req.body.declaracionFechaNacimiento,
+    });
+    if (!birthResolution.ok) {
+      return res.status(400).json({
+        success: false,
+        code: birthResolution.code,
+        message: birthResolution.message,
+      });
+    }
+    const ageGate = assertMeetsMinimumAge(birthResolution.birthIso);
+    if (!ageGate.ok) {
+      return res.status(400).json({ success: false, code: ageGate.code, message: ageGate.message });
+    }
+
+    const normalizedPhone = normalizeCRPhone(telefono.trim());
+    if (!normalizedPhone) {
+      return res.status(400).json({ success: false, message: 'El teléfono debe ser válido (ejemplo: 88001234 o +50688001234).' });
     }
 
     // Los usuarios de Google están activos inmediatamente (Google ya verificó su correo)
     const user = new User({
       nombre:   nombre.trim(),
       cedula:   cedula.trim(),
+      fechaNacimiento: birthResolution.birthIso,
+      birthDateSource: birthResolution.source,
       email:    email.trim().toLowerCase(),
       telefono: telefono.trim(),
+      twoFactorEnabled: true,
+      twoFactorPhone: normalizedPhone,
       googleId,
       estado:   'activo'
     });

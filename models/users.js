@@ -6,6 +6,10 @@ const userSchema = new mongoose.Schema({
     password:   { type: String },
     nombre:     { required: true, type: String },
     cedula:     { type: String, unique: true, sparse: true },
+    /** Fecha de nacimiento civil YYYY-MM-DD (padrón o declarada). */
+    fechaNacimiento: { type: String, default: null },
+    /** Origen de fechaNacimiento para trazabilidad (omitido en usuarios legacy). */
+    birthDateSource: { type: String, enum: ['padron', 'declarada'] },
     email:      { type: String, unique: true, sparse: true },
     telefono:   { type: String },
     estado:     { type: String, enum: ['pendiente', 'activo'], default: 'activo' },
