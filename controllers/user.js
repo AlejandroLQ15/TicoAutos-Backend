@@ -2,7 +2,15 @@
 const User = require('../models/users');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { generateToken, generateOTP, hashToken, expiresInMinutes, expiresInHours, normalizeCRPhone } = require('../utils/security/tokens');
+const {
+  generateToken,
+  generateOTP,
+  hashToken,
+  expiresInMinutes,
+  expiresInHours,
+  normalizeCRPhone,
+  jwtExpiresIn,
+} = require('../utils/security/tokens');
 const {
   extractBirthDateFromPadronPayload,
   resolveBirthDateForRegistration,
@@ -333,7 +341,7 @@ const userLogin = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, username: user.username },
       secret,
-      { expiresIn: '24h' }
+      { expiresIn: jwtExpiresIn() }
     );
 
     return res.status(200).json({
@@ -391,7 +399,7 @@ const verify2FA = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, username: user.username },
       secret,
-      { expiresIn: '24h' }
+      { expiresIn: jwtExpiresIn() }
     );
 
     return res.status(200).json({

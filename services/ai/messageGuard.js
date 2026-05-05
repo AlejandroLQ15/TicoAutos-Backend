@@ -1,17 +1,56 @@
 /**
- * Moderación de mensajes del inbox (preguntas y respuestas): filtro local + OpenAI.
+ * Moderación de mensajes del inbox (preguntas y respuestas): filtro local + OpenAI (opcional).
  *
  * Variables:
- *   OPENAI_API_KEY               — obligatoria (cada mensaje se valida con la API).
+ *   OPENAI_API_KEY               — si está definida, cada mensaje pasa también por el modelo.
  *   OPENAI_CHAT_MODERATION_MODEL — opcional, default gpt-4o-mini
+ *
+ * Sin API key: solo filtro local (teléfonos, correos, enlaces externos). Las frases sugeridas
+ * de la app coinciden con una lista segura y se aceptan aunque el texto parezca cercano a
+ * palabras de contacto.
  */
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const MAX_CHARS = 2800;
 
-/** Mensaje único para el usuario ante datos de contacto (heurística o IA). */
+/**
+ * @param {string} s
+ */
+function normalizeChipKey(s) {
+  return String(s || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Frases exactas del frontend (preguntas / respuestas sugeridas): siempre seguras en la plataforma. */
+const PLATFORM_SAFE_CHIPS = new Set(
+  [
+    '¿El precio es negociable?',
+    '¿Cuántos kilómetros tiene actualmente?',
+    '¿Tiene factura de compra?',
+    '¿Por qué motivo lo vende?',
+    '¿Puedo verlo en persona? ¿En qué provincia está?',
+    '¿Tiene algún detalle mecánico o de carrocería?',
+    '¿Cuántos dueños ha tenido?',
+    '¿Incluye algún extra o accesorio?',
+    '¿Está disponible para prueba de manejo?',
+    '¿Acepta financiamiento o solo efectivo?',
+    'Sí, podemos negociar el precio.',
+    'El vehículo está en muy buen estado.',
+    'Puedes verlo en persona, con gusto coordinamos.',
+    'Sí, tiene factura y papeles al día.',
+    'Lo vendo por renovación, no por fallas.',
+    'No tiene detalles mecánicos ni de carrocería.',
+    'Solo acepto efectivo o transferencia.',
+    'Sí, incluye [especificar] si te interesa.',
+  ].map((s) => normalizeChipKey(s))
+);
+
+let warnedOpenAiSkipped = false;
+
+/** Mensaje cuando el texto parece pedir contacto fuera de la plataforma. */
 const INVALID_PERSONAL_MSG =
-  'Mensaje inválido, no se permite compartir información personal.';
+  'Para cuidar a compradores y vendedores, acá no podés compartir teléfonos, correos ni enlaces para hablar por fuera. Escribí sobre el vehículo y coordiná la visita sin datos personales.';
 
 const BASE_POLICY = `Eres moderador de un marketplace de vehículos en Costa Rica (TicoAutos), con política tipo Airbnb: comprador y vendedor solo pueden coordinar dentro de la plataforma.
 
@@ -241,6 +280,11 @@ async function moderateOutboundChatText(text, opts = {}) {
   }
 
   const scanned = normalizeForModeration(trimmed);
+  const chipKey = normalizeChipKey(scanned);
+  if (PLATFORM_SAFE_CHIPS.has(chipKey)) {
+    return { allowed: true };
+  }
+
   const blockedLocal = heuristicContactBlock(scanned);
   if (blockedLocal) {
     return blockedLocal;
@@ -248,9 +292,13 @@ async function moderateOutboundChatText(text, opts = {}) {
 
   const apiKey = (process.env.OPENAI_API_KEY || '').trim();
   if (!apiKey) {
-    const err = new Error('OPENAI_API_KEY no está configurada.');
-    err.code = 'OPENAI_NOT_CONFIGURED';
-    throw err;
+    if (!warnedOpenAiSkipped) {
+      warnedOpenAiSkipped = true;
+      console.warn(
+        '[messageGuard] OPENAI_API_KEY no configurada: se usa solo revisión local (sin datos de contacto). Para capa extra con IA, agregá la clave al .env.'
+      );
+    }
+    return { allowed: true };
   }
 
   const model = (process.env.OPENAI_CHAT_MODERATION_MODEL || 'gpt-4o-mini').trim();

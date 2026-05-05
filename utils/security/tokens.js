@@ -63,4 +63,21 @@ const normalizeCRPhone = (phone) => {
   return null;
 };
 
-module.exports = { generateToken, generateOTP, hashToken, expiresInMinutes, expiresInHours, normalizeCRPhone };
+/**
+ * Duración del JWT de sesión (jsonwebtoken `expiresIn`, ej. 24h, 7d, 30d).
+ * @returns {string}
+ */
+const jwtExpiresIn = () => {
+  const raw = (process.env.JWT_EXPIRES_IN || '7d').trim();
+  return raw || '7d';
+};
+
+module.exports = {
+  generateToken,
+  generateOTP,
+  hashToken,
+  expiresInMinutes,
+  expiresInHours,
+  normalizeCRPhone,
+  jwtExpiresIn,
+};

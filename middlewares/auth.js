@@ -5,7 +5,7 @@ const protect = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ success: false, message: 'Access denied. No token provided.' });
+    return res.status(401).json({ success: false, message: 'Necesitás iniciar sesión para continuar.' });
   }
 
   const token = authHeader.split(' ')[1];
@@ -18,9 +18,13 @@ const protect = (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ success: false, message: 'Token expired.' });
+      return res.status(401).json({
+        success: false,
+        code: 'TOKEN_EXPIRED',
+        message: 'Tu sesión expiró por seguridad. Iniciá sesión de nuevo para enviar mensajes o seguir navegando.',
+      });
     }
-    return res.status(401).json({ success: false, message: 'Invalid token.' });
+    return res.status(401).json({ success: false, message: 'Sesión inválida. Iniciá sesión de nuevo.' });
   }
 };
 

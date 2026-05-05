@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/users');
 const { fetchPadronByCedula } = require('../services/cedula/padronClient');
 const { resolveBirthDateForRegistration, assertMeetsMinimumAge } = require('../utils/agePolicy');
-const { normalizeCRPhone } = require('../utils/security/tokens');
+const { normalizeCRPhone, jwtExpiresIn } = require('../utils/security/tokens');
 
 // ─── Passport Google Strategy ────────────────────────────────────────────────
 // Solo se inicializa si las credenciales de Google están configuradas en .env
@@ -53,7 +53,7 @@ const generateToken = (user) => {
   return jwt.sign(
     { id: user._id, username: user.username || user.email },
     secret,
-    { expiresIn: '24h' }
+    { expiresIn: jwtExpiresIn() }
   );
 };
 
