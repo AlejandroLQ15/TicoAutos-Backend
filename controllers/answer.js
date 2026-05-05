@@ -36,14 +36,11 @@ const answerPost = async (req, res) => {
     try {
       moderation = await moderateOutboundChatText(texto_respuesta, { kind: 'answer' });
     } catch (modErr) {
-      console.error('[answerPost] Moderación:', modErr.message);
+      console.error('[answerPost] Moderación inesperada:', modErr.message);
       return res.status(503).json({
         success: false,
         code: 'MODERATION_UNAVAILABLE',
-        message:
-          modErr.code === 'OPENAI_NOT_CONFIGURED'
-            ? 'El servicio de revisión de mensajes no está configurado. Contactá al administrador.'
-            : 'No pudimos revisar tu mensaje en este momento. Intentá de nuevo en unos minutos.',
+        message: 'No pudimos procesar tu mensaje en este momento. Intentá de nuevo en unos minutos.',
       });
     }
     if (!moderation.allowed) {

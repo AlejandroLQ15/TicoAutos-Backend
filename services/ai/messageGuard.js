@@ -22,30 +22,6 @@ function normalizeChipKey(s) {
     .trim();
 }
 
-/** Frases exactas del frontend (preguntas / respuestas sugeridas): siempre seguras en la plataforma. */
-const PLATFORM_SAFE_CHIPS = new Set(
-  [
-    '¿El precio es negociable?',
-    '¿Cuántos kilómetros tiene actualmente?',
-    '¿Tiene factura de compra?',
-    '¿Por qué motivo lo vende?',
-    '¿Puedo verlo en persona? ¿En qué provincia está?',
-    '¿Tiene algún detalle mecánico o de carrocería?',
-    '¿Cuántos dueños ha tenido?',
-    '¿Incluye algún extra o accesorio?',
-    '¿Está disponible para prueba de manejo?',
-    '¿Acepta financiamiento o solo efectivo?',
-    'Sí, podemos negociar el precio.',
-    'El vehículo está en muy buen estado.',
-    'Puedes verlo en persona, con gusto coordinamos.',
-    'Sí, tiene factura y papeles al día.',
-    'Lo vendo por renovación, no por fallas.',
-    'No tiene detalles mecánicos ni de carrocería.',
-    'Solo acepto efectivo o transferencia.',
-    'Sí, incluye [especificar] si te interesa.',
-  ].map((s) => normalizeChipKey(s))
-);
-
 let warnedOpenAiSkipped = false;
 
 /** Mensaje cuando el texto parece pedir contacto fuera de la plataforma. */
@@ -83,6 +59,41 @@ function normalizeForModeration(s) {
   let t = stripInvisibleSeparators(String(s || ''));
   t = t.replace(/&#43;/g, '+').replace(/&#x2b;/gi, '+').replace(/&plus;/gi, '+');
   return t.normalize('NFKC').normalize('NFC');
+}
+
+/** Mismas frases que los chips del frontend (vehiculo.html); misma normalización que el texto enviado. */
+const PLATFORM_SAFE_PHRASES = [
+  '¿El precio es negociable?',
+  '¿Cuántos kilómetros tiene actualmente?',
+  '¿Tiene factura de compra?',
+  '¿Por qué motivo lo vende?',
+  '¿Puedo verlo en persona? ¿En qué provincia está?',
+  '¿Tiene algún detalle mecánico o de carrocería?',
+  '¿Cuántos dueños ha tenido?',
+  '¿Incluye algún extra o accesorio?',
+  '¿Está disponible para prueba de manejo?',
+  '¿Acepta financiamiento o solo efectivo?',
+  'Sí, podemos negociar el precio.',
+  'El vehículo está en muy buen estado.',
+  'Puedes verlo en persona, con gusto coordinamos.',
+  'Sí, tiene factura y papeles al día.',
+  'Lo vendo por renovación, no por fallas.',
+  'No tiene detalles mecánicos ni de carrocería.',
+  'Solo acepto efectivo o transferencia.',
+  'Sí, incluye [especificar] si te interesa.',
+];
+
+const PLATFORM_SAFE_CHIPS = new Set(
+  PLATFORM_SAFE_PHRASES.map((s) => normalizeChipKey(normalizeForModeration(s)))
+);
+
+/**
+ * Claves tipo OpenAI (sk-…); si no coincide, no llamamos a la API y usamos solo filtro local.
+ * @param {string} key
+ */
+function isLikelyOpenAiApiKey(key) {
+  const k = String(key || '').trim();
+  return k.startsWith('sk-') && k.length >= 20;
 }
 
 /**
@@ -290,12 +301,19 @@ async function moderateOutboundChatText(text, opts = {}) {
     return blockedLocal;
   }
 
-  const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+  const apiKeyRaw = (process.env.OPENAI_API_KEY || '').trim();
+  const apiKey = isLikelyOpenAiApiKey(apiKeyRaw) ? apiKeyRaw : '';
+
   if (!apiKey) {
-    if (!warnedOpenAiSkipped) {
+    if (apiKeyRaw && !warnedOpenAiSkipped) {
       warnedOpenAiSkipped = true;
       console.warn(
-        '[messageGuard] OPENAI_API_KEY no configurada: se usa solo revisión local (sin datos de contacto). Para capa extra con IA, agregá la clave al .env.'
+        '[messageGuard] OPENAI_API_KEY vacía o no válida; los mensajes usan solo revisión local (sin datos de contacto). Opcional: pegá una clave que empiece con sk- desde platform.openai.com.'
+      );
+    } else if (!apiKeyRaw && !warnedOpenAiSkipped) {
+      warnedOpenAiSkipped = true;
+      console.warn(
+        '[messageGuard] Sin OPENAI_API_KEY: revisión solo local. Opcional: agregá sk-… en .env para una capa extra con IA.'
       );
     }
     return { allowed: true };
@@ -308,47 +326,50 @@ async function moderateOutboundChatText(text, opts = {}) {
       ? AbortSignal.timeout(timeoutMs)
       : undefined;
 
-  const res = await fetch(OPENAI_URL, {
-    method: 'POST',
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      max_tokens: 180,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: systemPrompt(kind) },
-        {
-          role: 'user',
-          content: `Analiza el siguiente mensaje y responde solo con JSON según las reglas.\n\n{"mensaje":${JSON.stringify(scanned)}}`,
-        },
-      ],
-    }),
-  });
+  try {
+    const res = await fetch(OPENAI_URL, {
+      method: 'POST',
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        max_tokens: 180,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt(kind) },
+          {
+            role: 'user',
+            content: `Analiza el siguiente mensaje y responde solo con JSON según las reglas.\n\n{"mensaje":${JSON.stringify(scanned)}}`,
+          },
+        ],
+      }),
+    });
 
-  if (!res.ok) {
-    const err = new Error(`OpenAI respondió ${res.status}`);
-    err.code = 'OPENAI_HTTP_ERROR';
-    throw err;
-  }
-
-  const data = await res.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  const verdict = parseVerdict(rawContent);
-  if (!verdict.allowed) {
-    if (verdict.modelRejected) {
-      return { allowed: false, message: INVALID_PERSONAL_MSG };
+    if (!res.ok) {
+      console.warn(`[messageGuard] OpenAI HTTP ${res.status}: se acepta el mensaje tras el filtro local.`);
+      return { allowed: true };
     }
-    return { allowed: false, message: verdict.message };
+
+    const data = await res.json();
+    const rawContent = data.choices?.[0]?.message?.content;
+    const verdict = parseVerdict(rawContent);
+    if (!verdict.allowed) {
+      if (verdict.modelRejected) {
+        return { allowed: false, message: INVALID_PERSONAL_MSG };
+      }
+      return { allowed: false, message: verdict.message };
+    }
+    const postLocal = heuristicContactBlock(scanned);
+    if (postLocal) return postLocal;
+    return { allowed: true };
+  } catch (e) {
+    console.warn('[messageGuard] OpenAI no disponible (%s): se acepta tras filtro local.', e.message);
+    return { allowed: true };
   }
-  // Por si el modelo se equivoca, misma verificación local tras la IA
-  const postLocal = heuristicContactBlock(scanned);
-  if (postLocal) return postLocal;
-  return { allowed: true };
 }
 
 module.exports = { moderateOutboundChatText, MAX_CHARS };
